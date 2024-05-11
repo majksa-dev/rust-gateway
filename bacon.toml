@@ -50,3 +50,4 @@ allow_warnings = true
 background = true
 
 [keybindings]
+c = "job:check"
