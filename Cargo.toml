@@ -3,14 +3,26 @@ name = "gateway"
 version = "0.0.1"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
+members = ["helper", "helper-macros"]
+resolver = "2"
+
+[workspace.dependencies]
+essentials = { tag = "v0.3.1", git = "https://github.com/majksa-dev/rust-essentials" }
 
 [dependencies]
-essentials = { tag = "v0.3.1", git = "https://github.com/majksa-dev/rust-essentials" }
-chrono = { version = "0.4.20", default-features = false, features = ["clock", "serde"] }
-derive_more = "0.99.7"
-futures-util = { version = "0.3.17", default-features = false, features = ["std"] }
-rand = "0.8"
-slab = "0.4"
+essentials.workspace = true
 serde = "1.0.197"
 serde_json = "1.0.114"
+pingora = { version = "0.2.0", features = ["proxy"] }
+regex = "1.10.3"
+async-trait = "0.1.77"
+structopt = "0.3.26"
+redis = "0.25.0"
+
+[dev-dependencies]
+helper = { path = "helper" }
+wiremock = "0.6.0"
+tokio = { version = "1", features = ["full"] }
+assert_fs = { version = "1.1.1", features = ["color"] }
+surf = "2.3.2"
