@@ -7,6 +7,8 @@
 //! assert_eq!(result, 4);
 //! ```
 
+pub mod http;
+
 /// Adds two numbers
 /// ```
 /// let result = add(2, 2);
