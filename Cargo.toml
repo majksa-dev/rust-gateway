@@ -3,12 +3,15 @@ name = "gateway"
 version = "0.0.1"
 edition = "2021"
 
+[features]
+debug = ["essentials/dotenv"]
+
 [workspace]
 members = ["helper", "helper-macros"]
 resolver = "2"
 
 [workspace.dependencies]
-essentials = { tag = "v0.3.1", git = "https://github.com/majksa-dev/rust-essentials" }
+essentials = { tag = "v0.3.1", git = "https://github.com/majksa-dev/rust-essentials", default-features = false, features = ["log"] }
 
 [dependencies]
 essentials.workspace = true
@@ -19,6 +22,8 @@ regex = "1.10.3"
 async-trait = "0.1.77"
 structopt = "0.3.26"
 redis = "0.25.0"
+tokio = { version = "1", features = ["full"] }
+snedfile = { version = "0.1", features = ["large-files"]}
 
 [dev-dependencies]
 helper = { path = "helper" }

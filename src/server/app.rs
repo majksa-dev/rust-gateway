@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use essentials::info;
 use pingora::apps::HttpServerApp;
 use structopt::StructOpt;
@@ -6,35 +8,41 @@ use pingora::proxy::{http_proxy_service, HttpProxy};
 use pingora::server::configuration::Opt;
 use pingora::server::Server;
 
+use crate::gateway::{entrypoint::EntryPoint, middleware::Middleware};
+
 use super::health_check::HealthCheck;
 
-pub struct ServerBuilder<G, H>
+pub struct ServerBuilder<H: Send + Sync + 'static>
 where
-    G: Send + Sync + 'static,
-    HttpProxy<G>: HttpServerApp,
-    H: Send + Sync + 'static,
+    HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    gateway: G,
+    middlewares: HashMap<usize, Box<dyn Middleware + Send + Sync + 'static>>,
     health_check: H,
     app_port: u16,
     health_check_port: u16,
 }
 
-impl<G, H> ServerBuilder<G, H>
+impl<H: Send + Sync + 'static> ServerBuilder<H>
 where
-    G: Send + Sync + 'static,
-    HttpProxy<G>: HttpServerApp,
-    H: Send + Sync + 'static,
+    HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    pub fn new(gateway: G, health_check: H) -> Self {
+    pub fn new(health_check: H) -> Self {
         Self {
-            gateway,
+            middlewares: HashMap::new(),
             health_check,
             app_port: 8080,
             health_check_port: 8081,
         }
+    }
+
+    pub fn register_middleware<M>(mut self, priority: usize, middleware: Box<M>) -> Self
+    where
+        M: Middleware + Send + Sync + 'static,
+    {
+        self.middlewares.insert(priority, middleware);
+        self
     }
 
     pub fn with_health_check(mut self, health_check: H) -> Self {
@@ -58,7 +66,8 @@ where
         my_server.bootstrap();
 
         {
-            let mut service = http_proxy_service(&my_server.configuration, self.gateway);
+            let gateway_entrypoint = EntryPoint(self.middlewares.into_values().collect());
+            let mut service = http_proxy_service(&my_server.configuration, gateway_entrypoint);
             let server = format!("127.0.0.1:{}", self.app_port);
             service.add_tcp(server.as_str());
             info!("Listening on {}", server);
@@ -76,20 +85,17 @@ where
     }
 }
 
-pub fn builder<G>(gateway: G) -> ServerBuilder<G, HealthCheck>
+pub fn builder() -> ServerBuilder<HealthCheck>
 where
-    G: Send + Sync + 'static,
-    HttpProxy<G>: HttpServerApp,
+    HttpProxy<EntryPoint>: HttpServerApp,
 {
-    ServerBuilder::<G, HealthCheck>::new(gateway, HealthCheck)
+    ServerBuilder::<HealthCheck>::new(HealthCheck)
 }
 
-pub fn builder_with_health_check<G, H>(gateway: G, health_check: H) -> ServerBuilder<G, H>
+pub fn builder_with_health_check<H: Send + Sync + 'static>(health_check: H) -> ServerBuilder<H>
 where
-    G: Send + Sync + 'static,
-    HttpProxy<G>: HttpServerApp,
-    H: Send + Sync + 'static,
+    HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    ServerBuilder::new(gateway, health_check)
+    ServerBuilder::new(health_check)
 }

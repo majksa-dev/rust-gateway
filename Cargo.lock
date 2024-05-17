@@ -1379,6 +1379,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "snedfile",
  "structopt",
  "surf",
  "tokio",
@@ -3633,6 +3634,15 @@ name = "smallvec"
 version = "1.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67"
+
+[[package]]
+name = "snedfile"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b49d9659526e7275bf3cd23e43cff8d14e4864ff1eb1e3836a07decbc3689b4"
+dependencies = [
+ "libc",
+]
 
 [[package]]
 name = "socket2"
