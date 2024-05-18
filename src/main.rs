@@ -4,7 +4,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use gateway::gateway::middleware::Middleware;
+use gateway::Middleware;
 use pingora::{proxy::Session, upstreams::peer::HttpPeer, Result};
 
 struct Gateway;
@@ -29,7 +29,7 @@ fn generate_peer_key(session: &Session) -> String {
 
 fn main() {
     essentials::install();
-    gateway::server::app::builder(Box::new(generate_peer_key))
+    gateway::builder(Box::new(generate_peer_key))
         .with_app_port(
             env::var("PORT")
                 .ok()
