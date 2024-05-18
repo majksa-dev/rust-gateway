@@ -4,7 +4,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use gateway::{Context, Middleware};
+use gateway::{
+    cors::{Cors, CorsConfig},
+    AnyContext, Context, Middleware,
+};
 use http::header;
 use pingora::{
     http::{ResponseHeader, StatusCode},
@@ -18,15 +21,15 @@ struct Gateway;
 struct Ctx;
 
 #[async_trait]
-impl Middleware<Ctx> for Gateway {
-    fn new_ctx(&self) -> Ctx {
-        Ctx
+impl Middleware for Gateway {
+    fn new_ctx(&self) -> AnyContext {
+        Box::new(Ctx)
     }
 
     async fn filter(
         &self,
         _session: &Session,
-        _context: (&Context, &mut Ctx),
+        _context: (&Context, &mut AnyContext),
     ) -> Result<Option<ResponseHeader>> {
         let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
         response.insert_header(header::SERVER, "Example")?;
@@ -36,6 +39,9 @@ impl Middleware<Ctx> for Gateway {
 
 fn main() {
     essentials::install();
+    let middleware = Box::new(Cors(CorsConfig {
+        config: Default::default(),
+    }));
     gateway::builder(Box::new(|session| {
         let mut host = session
             .get_header("Host")
@@ -62,6 +68,7 @@ fn main() {
         )),
         Box::new(|session| session.req_header().uri.path().to_string()),
     )
+    .register_middleware(1, middleware)
     .build()
     .unwrap()
     .run_forever();

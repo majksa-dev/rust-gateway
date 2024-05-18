@@ -12,6 +12,7 @@ use pingora::server::Server;
 
 use crate::gateway::entrypoint::EntryPoint;
 use crate::gateway::middleware::AnyMiddleware;
+use crate::Middleware;
 
 use super::health_check::HealthCheck;
 
@@ -61,7 +62,11 @@ where
     }
 
     /// Register a middleware with the given priority.
-    pub fn register_middleware<M>(mut self, priority: usize, middleware: AnyMiddleware) -> Self {
+    pub fn register_middleware(
+        mut self,
+        priority: usize,
+        middleware: Box<dyn Middleware + Send + Sync + 'static>,
+    ) -> Self {
         self.middlewares.insert(priority, middleware);
         self
     }

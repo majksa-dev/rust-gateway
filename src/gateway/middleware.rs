@@ -1,3 +1,5 @@
+use std::any::Any;
+
 use async_trait::async_trait;
 use pingora::{
     http::{RequestHeader, ResponseHeader},
@@ -7,15 +9,19 @@ use pingora::{
 
 use super::entrypoint::Context;
 
-pub type AnyContext = Box<dyn Send + Sync>;
-pub type AnyMiddleware = Box<dyn Middleware<AnyContext> + Send + Sync + 'static>;
+pub type AnyContext = Box<dyn Any + Send + Sync + 'static>;
+pub type AnyMiddleware = Box<dyn Middleware + Send + Sync + 'static>;
+
+pub trait CreateMiddleware {
+    fn create() -> AnyMiddleware;
+}
 
 /// Middleware is a trait that can be used to filter and modify requests and responses.
 /// It can be used to implement custom logic for handling requests and responses.
 /// Register a middleware using the [crate::server::app::ServerBuilder::register_middleware] method.
 #[async_trait]
-pub trait Middleware<C: Send + Sync> {
-    fn new_ctx(&self) -> C;
+pub trait Middleware {
+    fn new_ctx(&self) -> AnyContext;
 
     /// Filter the request before sending it to the upstream server.
     /// If the function returns a [ResponseHeader](https://docs.rs/pingora/latest/pingora/http/struct.ResponseHeader.html), the request will be dropped
@@ -24,7 +30,7 @@ pub trait Middleware<C: Send + Sync> {
     async fn filter(
         &self,
         _session: &Session,
-        _ctx: (&Context, &mut C),
+        _ctx: (&Context, &mut AnyContext),
     ) -> Result<Option<ResponseHeader>> {
         Ok(None)
     }
@@ -34,7 +40,7 @@ pub trait Middleware<C: Send + Sync> {
         &self,
         _session: &mut Session,
         _request: &mut RequestHeader,
-        _ctx: (&Context, &mut C),
+        _ctx: (&Context, &mut AnyContext),
     ) -> Result<()> {
         Ok(())
     }
@@ -44,7 +50,7 @@ pub trait Middleware<C: Send + Sync> {
         &self,
         _session: &mut Session,
         _response: &mut ResponseHeader,
-        _ctx: (&Context, &mut C),
+        _ctx: (&Context, &mut AnyContext),
     ) -> Result<()> {
         Ok(())
     }

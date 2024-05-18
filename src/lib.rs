@@ -9,7 +9,7 @@
 //! };
 //!
 //! use async_trait::async_trait;
-//! use gateway::{Middleware, Context};
+//! use gateway::{Middleware, Context, AnyContext};
 //! use http::header;
 //! use pingora::{
 //!     http::{ResponseHeader, StatusCode},
@@ -24,14 +24,14 @@
 //!
 //! #[async_trait]
 //! impl Middleware for Gateway {
-//!     fn new_ctx(&self) -> Ctx {
-//!         Ctx
+//!     fn new_ctx(&self) -> AnyContext {
+//!         Box::new(Ctx)
 //!     }
 //!
 //!     async fn filter(
 //!         &self,
 //!         _session: &Session,
-//!         _context: (&Context, &mut Ctx),
+//!         _context: (&Context, &mut AnyContext),
 //!     ) -> Result<Option<ResponseHeader>> {
 //!         let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
 //!         response.insert_header(header::SERVER, "Example")?;
