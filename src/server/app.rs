@@ -15,7 +15,7 @@ use crate::gateway::middleware::AnyMiddleware;
 
 use super::health_check::HealthCheck;
 
-pub(crate) type GeneratePeerKey = dyn (Fn(&Session) -> String) + Send + Sync + 'static;
+pub(crate) type GenerateKey = dyn (Fn(&Session) -> String) + Send + Sync + 'static;
 
 /// A builder for a server.
 pub struct ServerBuilder<H: Send + Sync + 'static>
@@ -23,8 +23,8 @@ where
     HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    generate_peer_key: Box<GeneratePeerKey>,
-    peers: HashMap<String, Box<HttpPeer>>,
+    generate_peer_key: Box<GenerateKey>,
+    peers: HashMap<String, (Box<HttpPeer>, Box<GenerateKey>)>,
     middlewares: HashMap<usize, AnyMiddleware>,
     health_check: H,
     host: IpAddr,
@@ -37,7 +37,7 @@ where
     HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    fn new(generate_peer_key: Box<GeneratePeerKey>, health_check: H) -> Self {
+    fn new(generate_peer_key: Box<GenerateKey>, health_check: H) -> Self {
         Self {
             generate_peer_key,
             peers: HashMap::new(),
@@ -50,8 +50,13 @@ where
     }
 
     /// Register a peer with the given key.
-    pub fn register_peer(mut self, key: String, peer: Box<HttpPeer>) -> Self {
-        self.peers.insert(key, peer);
+    pub fn register_peer(
+        mut self,
+        key: String,
+        peer: Box<HttpPeer>,
+        endpoint_key_generator: Box<GenerateKey>,
+    ) -> Self {
+        self.peers.insert(key, (peer, endpoint_key_generator));
         self
     }
 
@@ -115,7 +120,7 @@ where
 
 /// Create a new server builder with a default health check.
 /// The health check will return a 200 OK response for all requests.
-pub fn builder(generate_peer_key: Box<GeneratePeerKey>) -> ServerBuilder<HealthCheck>
+pub fn builder(generate_peer_key: Box<GenerateKey>) -> ServerBuilder<HealthCheck>
 where
     HttpProxy<EntryPoint>: HttpServerApp,
 {
@@ -126,7 +131,7 @@ where
 /// The health check must implement the [ProxyHttp](https://docs.rs/pingora/latest/pingora/proxy/trait.ProxyHttp.html) trait.
 /// The health check service wrapped in [HttpProxy](https://docs.rs/pingora/latest/pingora/proxy/struct.HttpProxy.html) must implement the [HttpServerApp](https://docs.rs/pingora/latest/pingora/apps/trait.HttpServerApp.html) trait.
 pub fn builder_with_health_check<H: Send + Sync + 'static>(
-    generate_peer_key: Box<GeneratePeerKey>,
+    generate_peer_key: Box<GenerateKey>,
     health_check: H,
 ) -> ServerBuilder<H>
 where

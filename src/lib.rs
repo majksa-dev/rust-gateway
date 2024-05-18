@@ -65,6 +65,7 @@
 //!             false,
 //!             "localhost".to_string(),
 //!         )),
+//!         Box::new(|session| session.req_header().uri.path().to_string()),
 //!     )
 //!     .build()
 //!     .unwrap()

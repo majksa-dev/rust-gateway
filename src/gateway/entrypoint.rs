@@ -9,20 +9,20 @@ use pingora::{
     Error, ErrorType, Result,
 };
 
-use crate::server::app::GeneratePeerKey;
+use crate::server::app::GenerateKey;
 
 use super::middleware::{AnyContext, AnyMiddleware};
 
 pub struct EntryPoint {
-    generate_peer_key: Box<GeneratePeerKey>,
-    peers: HashMap<String, Box<HttpPeer>>,
+    generate_peer_key: Box<GenerateKey>,
+    peers: HashMap<String, (Box<HttpPeer>, Box<GenerateKey>)>,
     middlewares: Vec<AnyMiddleware>,
 }
 
 impl EntryPoint {
     pub fn new(
-        generate_peer_key: Box<GeneratePeerKey>,
-        peers: HashMap<String, Box<HttpPeer>>,
+        generate_peer_key: Box<GenerateKey>,
+        peers: HashMap<String, (Box<HttpPeer>, Box<GenerateKey>)>,
         middlewares: Vec<AnyMiddleware>,
     ) -> Self {
         Self {
@@ -54,6 +54,7 @@ unsafe impl Sync for Ctx {}
 
 pub struct Context {
     pub id: String,
+    pub endpoint: String,
 }
 
 #[async_trait]
@@ -65,8 +66,17 @@ impl ProxyHttp for EntryPoint {
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
+        let id = (self.generate_peer_key)(session);
+        let peer = match self.peers.get(&id) {
+            Some(peer) => peer,
+            None => {
+                session.respond_error(502).await;
+                return Ok(true);
+            }
+        };
         let context = Context {
-            id: (self.generate_peer_key)(session),
+            id,
+            endpoint: (peer.1)(session),
         };
         for (controller, ctx) in self
             .middlewares
@@ -84,12 +94,8 @@ impl ProxyHttp for EntryPoint {
                 }
             }
         }
-        ctx.peer = self.peers.get(&context.id).cloned();
+        ctx.peer = Some(peer.0.clone());
         ctx.context = Some(context);
-        if ctx.peer.is_none() {
-            session.respond_error(502).await;
-            return Ok(true);
-        }
         Ok(false)
     }
 
