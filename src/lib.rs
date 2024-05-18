@@ -71,9 +71,11 @@
 //!     .unwrap()
 //!     .run_forever();
 //! ```
+#[cfg(feature = "cors")]
+pub mod cors;
 pub(crate) mod gateway;
 pub(crate) mod server;
 
 pub use gateway::entrypoint::Context;
-pub use gateway::middleware::Middleware;
+pub use gateway::middleware::{AnyContext, Middleware};
 pub use server::app::{builder, builder_with_health_check, ServerBuilder};
