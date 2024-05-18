@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use essentials::info;
 use pingora::apps::HttpServerApp;
+use pingora::upstreams::peer::HttpPeer;
 use structopt::StructOpt;
 
 use pingora::proxy::{http_proxy_service, HttpProxy};
@@ -11,12 +12,14 @@ use pingora::server::Server;
 use crate::gateway::{entrypoint::EntryPoint, middleware::Middleware};
 
 use super::health_check::HealthCheck;
+use super::upstream_peer::{GeneratePeerKey, UpstreamPeerConnector};
 
 pub struct ServerBuilder<H: Send + Sync + 'static>
 where
     HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
+    peer_connector: UpstreamPeerConnector,
     middlewares: HashMap<usize, Box<dyn Middleware + Send + Sync + 'static>>,
     health_check: H,
     app_port: u16,
@@ -28,13 +31,19 @@ where
     HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    pub fn new(health_check: H) -> Self {
+    pub fn new(generate_peer_key: Box<GeneratePeerKey>, health_check: H) -> Self {
         Self {
+            peer_connector: UpstreamPeerConnector::new(generate_peer_key),
             middlewares: HashMap::new(),
             health_check,
             app_port: 8080,
             health_check_port: 8081,
         }
+    }
+
+    pub fn register_peer(mut self, key: String, peer: Box<HttpPeer>) -> Self {
+        self.peer_connector.register_peer(key, peer);
+        self
     }
 
     pub fn register_middleware<M>(mut self, priority: usize, middleware: Box<M>) -> Self
@@ -66,7 +75,10 @@ where
         my_server.bootstrap();
 
         {
-            let gateway_entrypoint = EntryPoint(self.middlewares.into_values().collect());
+            let gateway_entrypoint = EntryPoint::new(
+                self.peer_connector,
+                self.middlewares.into_values().collect(),
+            );
             let mut service = http_proxy_service(&my_server.configuration, gateway_entrypoint);
             let server = format!("127.0.0.1:{}", self.app_port);
             service.add_tcp(server.as_str());
@@ -85,17 +97,20 @@ where
     }
 }
 
-pub fn builder() -> ServerBuilder<HealthCheck>
+pub fn builder(generate_peer_key: Box<GeneratePeerKey>) -> ServerBuilder<HealthCheck>
 where
     HttpProxy<EntryPoint>: HttpServerApp,
 {
-    ServerBuilder::<HealthCheck>::new(HealthCheck)
+    builder_with_health_check(generate_peer_key, HealthCheck)
 }
 
-pub fn builder_with_health_check<H: Send + Sync + 'static>(health_check: H) -> ServerBuilder<H>
+pub fn builder_with_health_check<H: Send + Sync + 'static>(
+    generate_peer_key: Box<GeneratePeerKey>,
+    health_check: H,
+) -> ServerBuilder<H>
 where
     HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    ServerBuilder::new(health_check)
+    ServerBuilder::new(generate_peer_key, health_check)
 }

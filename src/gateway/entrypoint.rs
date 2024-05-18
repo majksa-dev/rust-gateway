@@ -1,25 +1,34 @@
 use async_trait::async_trait;
-use essentials::info;
 use pingora::{
     proxy::{ProxyHttp, Session},
     upstreams::peer::HttpPeer,
-    Result,
+    Error, ErrorType, Result,
 };
+
+use crate::server::upstream_peer::UpstreamPeerConnector;
 
 use super::middleware::Middleware;
 
-pub struct EntryPoint(pub Vec<Box<dyn Middleware + Send + Sync + 'static>>);
+pub struct EntryPoint {
+    peer_connector: UpstreamPeerConnector,
+    middlewares: Vec<Box<dyn Middleware + Send + Sync + 'static>>,
+}
 
-#[derive(Debug, Clone, Default)]
-pub enum Phase {
-    #[default]
-    Init,
-    Responded,
+impl EntryPoint {
+    pub fn new(
+        peer_connector: UpstreamPeerConnector,
+        middlewares: Vec<Box<dyn Middleware + Send + Sync + 'static>>,
+    ) -> Self {
+        Self {
+            peer_connector,
+            middlewares,
+        }
+    }
 }
 
 #[derive(Default)]
 pub struct Context {
-    pub phase: Phase,
+    peer: Option<Box<HttpPeer>>,
 }
 
 unsafe impl Send for Context {}
@@ -30,24 +39,30 @@ impl ProxyHttp for EntryPoint {
     type CTX = Context;
 
     fn new_ctx(&self) -> Self::CTX {
-        info!("Creating new context");
         Context::default()
     }
 
-    async fn request_filter(&self, session: &mut Session, _ctx: &mut Self::CTX) -> Result<bool> {
-        for controller in self.0.iter() {
-            if !controller.request_filter(session).await? {
-                return Ok(false);
+    async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
+        for controller in self.middlewares.iter() {
+            if controller.request_filter(session).await? {
+                return Ok(true);
             }
         }
-        Ok(true)
+        ctx.peer = self.peer_connector.get_peer(session);
+        if ctx.peer.is_none() {
+            session.respond_error(502).await;
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     async fn upstream_peer(
         &self,
         _session: &mut Session,
-        _ctx: &mut Self::CTX,
+        ctx: &mut Self::CTX,
     ) -> Result<Box<HttpPeer>> {
-        todo!()
+        ctx.peer
+            .take()
+            .ok_or_else(|| Error::new(ErrorType::ConnectProxyFailure))
     }
 }
