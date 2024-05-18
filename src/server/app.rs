@@ -31,7 +31,7 @@ where
     HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    pub fn new(generate_peer_key: Box<GeneratePeerKey>, health_check: H) -> Self {
+    fn new(generate_peer_key: Box<GeneratePeerKey>, health_check: H) -> Self {
         Self {
             peer_connector: UpstreamPeerConnector::new(generate_peer_key),
             middlewares: HashMap::new(),

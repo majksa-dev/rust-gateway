@@ -11,9 +11,9 @@ struct Gateway;
 
 #[async_trait]
 impl Middleware for Gateway {
-    async fn request_filter(&self, session: &mut Session) -> Result<bool> {
+    async fn filter(&self, session: &mut Session) -> Result<bool> {
         session.respond_error(405).await;
-        Ok(true)
+        Ok(false)
     }
 }
 

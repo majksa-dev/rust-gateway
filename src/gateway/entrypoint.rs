@@ -1,5 +1,7 @@
 use async_trait::async_trait;
+use essentials::error;
 use pingora::{
+    http::{RequestHeader, ResponseHeader},
     proxy::{ProxyHttp, Session},
     upstreams::peer::HttpPeer,
     Error, ErrorType, Result,
@@ -44,8 +46,14 @@ impl ProxyHttp for EntryPoint {
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         for controller in self.middlewares.iter() {
-            if controller.request_filter(session).await? {
-                return Ok(true);
+            match controller.filter(session).await {
+                Ok(false) => {
+                    return Ok(true);
+                }
+                Ok(true) => {}
+                Err(e) => {
+                    error!("filter error: {:?}", e);
+                }
             }
         }
         ctx.peer = self.peer_connector.get_peer(session);
@@ -64,5 +72,33 @@ impl ProxyHttp for EntryPoint {
         ctx.peer
             .take()
             .ok_or_else(|| Error::new(ErrorType::ConnectProxyFailure))
+    }
+
+    async fn upstream_request_filter(
+        &self,
+        session: &mut Session,
+        request: &mut RequestHeader,
+        _ctx: &mut Self::CTX,
+    ) -> Result<()> {
+        for controller in self.middlewares.iter() {
+            if let Err(e) = controller.modify_request(session, request).await {
+                error!("modify request error: {:?}", e);
+            }
+        }
+        Ok(())
+    }
+
+    async fn response_filter(
+        &self,
+        session: &mut Session,
+        response: &mut ResponseHeader,
+        _ctx: &mut Self::CTX,
+    ) -> Result<()> {
+        for controller in self.middlewares.iter() {
+            if let Err(e) = controller.modify_response(session, response).await {
+                error!("modify response error: {:?}", e);
+            }
+        }
+        Ok(())
     }
 }
