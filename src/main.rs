@@ -4,7 +4,7 @@ use std::{
 };
 
 use async_trait::async_trait;
-use gateway::Middleware;
+use gateway::{Context, Middleware};
 use http::header;
 use pingora::{
     http::{ResponseHeader, StatusCode},
@@ -17,7 +17,11 @@ struct Gateway;
 
 #[async_trait]
 impl Middleware for Gateway {
-    async fn filter(&self, _session: &Session) -> Result<Option<ResponseHeader>> {
+    async fn filter(
+        &self,
+        _session: &Session,
+        _context: &Context,
+    ) -> Result<Option<ResponseHeader>> {
         let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
         response.insert_header(header::SERVER, "Example")?;
         Ok(Some(response))

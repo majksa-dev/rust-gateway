@@ -6,14 +6,15 @@ use pingora::apps::HttpServerApp;
 use pingora::upstreams::peer::HttpPeer;
 use structopt::StructOpt;
 
-use pingora::proxy::{http_proxy_service, HttpProxy};
+use pingora::proxy::{http_proxy_service, HttpProxy, Session};
 use pingora::server::configuration::Opt;
 use pingora::server::Server;
 
 use crate::gateway::{entrypoint::EntryPoint, middleware::Middleware};
 
 use super::health_check::HealthCheck;
-use super::upstream_peer::{GeneratePeerKey, UpstreamPeerConnector};
+
+pub(crate) type GeneratePeerKey = dyn (Fn(&Session) -> String) + Send + Sync + 'static;
 
 /// A builder for a server.
 pub struct ServerBuilder<H: Send + Sync + 'static>
@@ -21,7 +22,8 @@ where
     HttpProxy<EntryPoint>: HttpServerApp,
     HttpProxy<H>: HttpServerApp,
 {
-    peer_connector: UpstreamPeerConnector,
+    generate_peer_key: Box<GeneratePeerKey>,
+    peers: HashMap<String, Box<HttpPeer>>,
     middlewares: HashMap<usize, Box<dyn Middleware + Send + Sync + 'static>>,
     health_check: H,
     host: IpAddr,
@@ -36,7 +38,8 @@ where
 {
     fn new(generate_peer_key: Box<GeneratePeerKey>, health_check: H) -> Self {
         Self {
-            peer_connector: UpstreamPeerConnector::new(generate_peer_key),
+            generate_peer_key,
+            peers: HashMap::new(),
             middlewares: HashMap::new(),
             health_check,
             host: IpAddr::from([127, 0, 0, 1]), // Default host (localhost)
@@ -47,7 +50,7 @@ where
 
     /// Register a peer with the given key.
     pub fn register_peer(mut self, key: String, peer: Box<HttpPeer>) -> Self {
-        self.peer_connector.register_peer(key, peer);
+        self.peers.insert(key, peer);
         self
     }
 
@@ -90,7 +93,8 @@ where
 
         {
             let gateway_entrypoint = EntryPoint::new(
-                self.peer_connector,
+                self.generate_peer_key,
+                self.peers,
                 self.middlewares.into_values().collect(),
             );
             let mut service = http_proxy_service(&my_server.configuration, gateway_entrypoint);

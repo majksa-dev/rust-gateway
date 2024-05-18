@@ -9,7 +9,7 @@
 //! };
 //!
 //! use async_trait::async_trait;
-//! use gateway::Middleware;
+//! use gateway::{Middleware, Context};
 //! use http::header;
 //! use pingora::{
 //!     http::{ResponseHeader, StatusCode},
@@ -22,10 +22,15 @@
 //!
 //! #[async_trait]
 //! impl Middleware for Gateway {
-//! async fn filter(&self, _session: &Session) -> Result<Option<ResponseHeader>> {
-//!     let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
-//!     response.insert_header(header::SERVER, "Example")?;
-//!     Ok(Some(response))
+//!     async fn filter(
+//!         &self,
+//!         _session: &Session,
+//!         _context: &Context,
+//!     ) -> Result<Option<ResponseHeader>> {
+//!         let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
+//!         response.insert_header(header::SERVER, "Example")?;
+//!         Ok(Some(response))
+//!     }
 //! }
 //!
 //! fn generate_peer_key(session: &Session) -> String {
@@ -62,5 +67,6 @@
 pub(crate) mod gateway;
 pub(crate) mod server;
 
+pub use gateway::entrypoint::Context;
 pub use gateway::middleware::Middleware;
 pub use server::app::{builder, builder_with_health_check, ServerBuilder};

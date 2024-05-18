@@ -5,6 +5,8 @@ use pingora::{
     Result,
 };
 
+use super::entrypoint::Context;
+
 /// Middleware is a trait that can be used to filter and modify requests and responses.
 /// It can be used to implement custom logic for handling requests and responses.
 /// Register a middleware using the [crate::server::app::ServerBuilder::register_middleware] method.
@@ -14,7 +16,7 @@ pub trait Middleware {
     /// If the function returns a [ResponseHeader](https://docs.rs/pingora/latest/pingora/http/struct.ResponseHeader.html), the request will be dropped
     /// and instead the response will be sent to the client.
     /// If the function returns None, the request will be sent to the upstream server.
-    async fn filter(&self, _session: &Session) -> Result<Option<ResponseHeader>> {
+    async fn filter(&self, _session: &Session, _ctx: &Context) -> Result<Option<ResponseHeader>> {
         Ok(None)
     }
 
@@ -23,6 +25,7 @@ pub trait Middleware {
         &self,
         _session: &mut Session,
         _request: &mut RequestHeader,
+        _ctx: &Context,
     ) -> Result<()> {
         Ok(())
     }
@@ -32,6 +35,7 @@ pub trait Middleware {
         &self,
         _session: &mut Session,
         _response: &mut ResponseHeader,
+        _ctx: &Context,
     ) -> Result<()> {
         Ok(())
     }

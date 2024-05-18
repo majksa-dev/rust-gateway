@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use essentials::error;
 use pingora::{
@@ -7,46 +9,57 @@ use pingora::{
     Error, ErrorType, Result,
 };
 
-use crate::server::upstream_peer::UpstreamPeerConnector;
+use crate::server::app::GeneratePeerKey;
 
 use super::middleware::Middleware;
 
 pub struct EntryPoint {
-    peer_connector: UpstreamPeerConnector,
+    generate_peer_key: Box<GeneratePeerKey>,
+    peers: HashMap<String, Box<HttpPeer>>,
     middlewares: Vec<Box<dyn Middleware + Send + Sync + 'static>>,
 }
 
 impl EntryPoint {
     pub fn new(
-        peer_connector: UpstreamPeerConnector,
+        generate_peer_key: Box<GeneratePeerKey>,
+        peers: HashMap<String, Box<HttpPeer>>,
         middlewares: Vec<Box<dyn Middleware + Send + Sync + 'static>>,
     ) -> Self {
         Self {
-            peer_connector,
+            generate_peer_key,
+            peers,
             middlewares,
         }
     }
 }
 
 #[derive(Default)]
-pub struct Context {
+pub struct Ctx {
+    context: Option<Context>,
     peer: Option<Box<HttpPeer>>,
 }
 
-unsafe impl Send for Context {}
-unsafe impl Sync for Context {}
+unsafe impl Send for Ctx {}
+unsafe impl Sync for Ctx {}
+
+pub struct Context {
+    id: String,
+}
 
 #[async_trait]
 impl ProxyHttp for EntryPoint {
-    type CTX = Context;
+    type CTX = Ctx;
 
     fn new_ctx(&self) -> Self::CTX {
-        Context::default()
+        Ctx::default()
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
+        let context = Context {
+            id: (self.generate_peer_key)(session),
+        };
         for controller in self.middlewares.iter() {
-            match controller.filter(session).await {
+            match controller.filter(session, &context).await {
                 Ok(Some(response)) => {
                     session.write_response_header(Box::new(response)).await?;
                     return Ok(true);
@@ -57,7 +70,8 @@ impl ProxyHttp for EntryPoint {
                 }
             }
         }
-        ctx.peer = self.peer_connector.get_peer(session);
+        ctx.peer = self.peers.get(&context.id).cloned();
+        ctx.context = Some(context);
         if ctx.peer.is_none() {
             session.respond_error(502).await;
             return Ok(true);
@@ -79,10 +93,11 @@ impl ProxyHttp for EntryPoint {
         &self,
         session: &mut Session,
         request: &mut RequestHeader,
-        _ctx: &mut Self::CTX,
+        ctx: &mut Self::CTX,
     ) -> Result<()> {
+        let context = ctx.context.as_ref().unwrap();
         for controller in self.middlewares.iter() {
-            if let Err(e) = controller.modify_request(session, request).await {
+            if let Err(e) = controller.modify_request(session, request, context).await {
                 error!("modify request error: {:?}", e);
             }
         }
@@ -93,10 +108,11 @@ impl ProxyHttp for EntryPoint {
         &self,
         session: &mut Session,
         response: &mut ResponseHeader,
-        _ctx: &mut Self::CTX,
+        ctx: &mut Self::CTX,
     ) -> Result<()> {
+        let context = ctx.context.as_ref().unwrap();
         for controller in self.middlewares.iter() {
-            if let Err(e) = controller.modify_response(session, response).await {
+            if let Err(e) = controller.modify_response(session, response, context).await {
                 error!("modify response error: {:?}", e);
             }
         }
