@@ -47,10 +47,11 @@ impl ProxyHttp for EntryPoint {
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         for controller in self.middlewares.iter() {
             match controller.filter(session).await {
-                Ok(false) => {
+                Ok(Some(response)) => {
+                    session.write_response_header(Box::new(response)).await?;
                     return Ok(true);
                 }
-                Ok(true) => {}
+                Ok(None) => {}
                 Err(e) => {
                     error!("filter error: {:?}", e);
                 }

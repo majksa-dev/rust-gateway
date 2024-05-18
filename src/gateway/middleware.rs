@@ -11,11 +11,11 @@ use pingora::{
 #[async_trait]
 pub trait Middleware {
     /// Filter the request before sending it to the upstream server.
-    /// If the function returns false, the request will be dropped
-    /// and instead a response will be sent to the client.
-    /// If the function returns true, the request will be sent to the upstream server.
-    async fn filter(&self, _session: &mut Session) -> Result<bool> {
-        Ok(true)
+    /// If the function returns a [ResponseHeader](https://docs.rs/pingora/latest/pingora/http/struct.ResponseHeader.html), the request will be dropped
+    /// and instead the response will be sent to the client.
+    /// If the function returns None, the request will be sent to the upstream server.
+    async fn filter(&self, _session: &Session) -> Result<Option<ResponseHeader>> {
+        Ok(None)
     }
 
     /// Modify the request before sending it to the upstream server.

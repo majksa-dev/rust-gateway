@@ -24,6 +24,7 @@ structopt = "0.3.26"
 redis = "0.25.0"
 tokio = { version = "1", features = ["full"] }
 snedfile = { version = "0.1", features = ["large-files"]}
+http = "1.1.0"
 
 [dev-dependencies]
 helper = { path = "helper" }

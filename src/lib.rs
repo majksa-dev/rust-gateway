@@ -10,16 +10,22 @@
 //!
 //! use async_trait::async_trait;
 //! use gateway::Middleware;
-//! use pingora::{proxy::Session, upstreams::peer::HttpPeer, Result};
+//! use http::header;
+//! use pingora::{
+//!     http::{ResponseHeader, StatusCode},
+//!     proxy::Session,
+//!     upstreams::peer::HttpPeer,
+//!     Result,
+//! };
 //!
 //! struct Gateway;
 //!
 //! #[async_trait]
 //! impl Middleware for Gateway {
-//!     async fn filter(&self, session: &mut Session) -> Result<bool> {
-//!         session.respond_error(404).await;
-//!         Ok(false)
-//!     }
+//! async fn filter(&self, _session: &Session) -> Result<Option<ResponseHeader>> {
+//!     let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
+//!     response.insert_header(header::SERVER, "Example")?;
+//!     Ok(Some(response))
 //! }
 //!
 //! fn generate_peer_key(session: &Session) -> String {
