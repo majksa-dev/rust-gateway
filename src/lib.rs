@@ -20,12 +20,18 @@
 //!
 //! struct Gateway;
 //!
+//! struct Ctx;
+//!
 //! #[async_trait]
 //! impl Middleware for Gateway {
+//!     fn new_ctx(&self) -> Ctx {
+//!         Ctx
+//!     }
+//!
 //!     async fn filter(
 //!         &self,
 //!         _session: &Session,
-//!         _context: &Context,
+//!         _context: (&Context, &mut Ctx),
 //!     ) -> Result<Option<ResponseHeader>> {
 //!         let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
 //!         response.insert_header(header::SERVER, "Example")?;

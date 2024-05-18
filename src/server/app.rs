@@ -10,7 +10,8 @@ use pingora::proxy::{http_proxy_service, HttpProxy, Session};
 use pingora::server::configuration::Opt;
 use pingora::server::Server;
 
-use crate::gateway::{entrypoint::EntryPoint, middleware::Middleware};
+use crate::gateway::entrypoint::EntryPoint;
+use crate::gateway::middleware::AnyMiddleware;
 
 use super::health_check::HealthCheck;
 
@@ -24,7 +25,7 @@ where
 {
     generate_peer_key: Box<GeneratePeerKey>,
     peers: HashMap<String, Box<HttpPeer>>,
-    middlewares: HashMap<usize, Box<dyn Middleware + Send + Sync + 'static>>,
+    middlewares: HashMap<usize, AnyMiddleware>,
     health_check: H,
     host: IpAddr,
     app_port: u16,
@@ -55,10 +56,7 @@ where
     }
 
     /// Register a middleware with the given priority.
-    pub fn register_middleware<M>(mut self, priority: usize, middleware: Box<M>) -> Self
-    where
-        M: Middleware + Send + Sync + 'static,
-    {
+    pub fn register_middleware<M>(mut self, priority: usize, middleware: AnyMiddleware) -> Self {
         self.middlewares.insert(priority, middleware);
         self
     }

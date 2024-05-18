@@ -11,19 +11,19 @@ use pingora::{
 
 use crate::server::app::GeneratePeerKey;
 
-use super::middleware::Middleware;
+use super::middleware::{AnyContext, AnyMiddleware};
 
 pub struct EntryPoint {
     generate_peer_key: Box<GeneratePeerKey>,
     peers: HashMap<String, Box<HttpPeer>>,
-    middlewares: Vec<Box<dyn Middleware + Send + Sync + 'static>>,
+    middlewares: Vec<AnyMiddleware>,
 }
 
 impl EntryPoint {
     pub fn new(
         generate_peer_key: Box<GeneratePeerKey>,
         peers: HashMap<String, Box<HttpPeer>>,
-        middlewares: Vec<Box<dyn Middleware + Send + Sync + 'static>>,
+        middlewares: Vec<AnyMiddleware>,
     ) -> Self {
         Self {
             generate_peer_key,
@@ -36,14 +36,24 @@ impl EntryPoint {
 #[derive(Default)]
 pub struct Ctx {
     context: Option<Context>,
+    middleware_contexts: Vec<AnyContext>,
     peer: Option<Box<HttpPeer>>,
+}
+
+impl Ctx {
+    pub fn new(contexts: Vec<AnyContext>) -> Self {
+        Ctx {
+            middleware_contexts: contexts,
+            ..Default::default()
+        }
+    }
 }
 
 unsafe impl Send for Ctx {}
 unsafe impl Sync for Ctx {}
 
 pub struct Context {
-    id: String,
+    pub id: String,
 }
 
 #[async_trait]
@@ -51,15 +61,19 @@ impl ProxyHttp for EntryPoint {
     type CTX = Ctx;
 
     fn new_ctx(&self) -> Self::CTX {
-        Ctx::default()
+        Ctx::new(self.middlewares.iter().map(|m| m.new_ctx()).collect())
     }
 
     async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
         let context = Context {
             id: (self.generate_peer_key)(session),
         };
-        for controller in self.middlewares.iter() {
-            match controller.filter(session, &context).await {
+        for (controller, ctx) in self
+            .middlewares
+            .iter()
+            .zip(ctx.middleware_contexts.iter_mut())
+        {
+            match controller.filter(session, (&context, ctx)).await {
                 Ok(Some(response)) => {
                     session.write_response_header(Box::new(response)).await?;
                     return Ok(true);
@@ -96,8 +110,15 @@ impl ProxyHttp for EntryPoint {
         ctx: &mut Self::CTX,
     ) -> Result<()> {
         let context = ctx.context.as_ref().unwrap();
-        for controller in self.middlewares.iter() {
-            if let Err(e) = controller.modify_request(session, request, context).await {
+        for (controller, ctx) in self
+            .middlewares
+            .iter()
+            .zip(ctx.middleware_contexts.iter_mut())
+        {
+            if let Err(e) = controller
+                .modify_request(session, request, (context, ctx))
+                .await
+            {
                 error!("modify request error: {:?}", e);
             }
         }
@@ -111,8 +132,15 @@ impl ProxyHttp for EntryPoint {
         ctx: &mut Self::CTX,
     ) -> Result<()> {
         let context = ctx.context.as_ref().unwrap();
-        for controller in self.middlewares.iter() {
-            if let Err(e) = controller.modify_response(session, response, context).await {
+        for (controller, ctx) in self
+            .middlewares
+            .iter()
+            .zip(ctx.middleware_contexts.iter_mut())
+        {
+            if let Err(e) = controller
+                .modify_response(session, response, (context, ctx))
+                .await
+            {
                 error!("modify response error: {:?}", e);
             }
         }
