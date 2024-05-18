@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::net::IpAddr;
 
 use essentials::info;
 use pingora::apps::HttpServerApp;
@@ -23,6 +24,7 @@ where
     peer_connector: UpstreamPeerConnector,
     middlewares: HashMap<usize, Box<dyn Middleware + Send + Sync + 'static>>,
     health_check: H,
+    host: IpAddr,
     app_port: u16,
     health_check_port: u16,
 }
@@ -37,8 +39,9 @@ where
             peer_connector: UpstreamPeerConnector::new(generate_peer_key),
             middlewares: HashMap::new(),
             health_check,
-            app_port: 8080,
-            health_check_port: 8081,
+            host: IpAddr::from([127, 0, 0, 1]), // Default host (localhost)
+            app_port: 80,
+            health_check_port: 9000,
         }
     }
 
@@ -57,13 +60,22 @@ where
         self
     }
 
+    /// Set the host for the application service.
+    /// The default host is 127.0.0.1
+    pub fn with_host(mut self, host: IpAddr) -> Self {
+        self.host = host;
+        self
+    }
+
     /// Set the port for the application service.
+    /// The default port is 80
     pub fn with_app_port(mut self, port: u16) -> Self {
         self.app_port = port;
         self
     }
 
     /// Set the port for the health check service.
+    /// The default port is 9000
     pub fn with_health_check_port(mut self, port: u16) -> Self {
         self.health_check_port = port;
         self
@@ -71,10 +83,6 @@ where
 
     /// Build the server with the given configuration.
     /// The server will listen on the specified ports and will use the specified health check.
-    /// The server will use the specified middlewares to filter and modify requests and responses.
-    /// The server will use the specified peer connector to connect to upstream servers.
-    /// The server will use the specified generate peer key function to generate keys for the peer connector.
-    /// The server will use the specified health check to check the health of the server.
     pub fn build(self) -> pingora::Result<Server> {
         let opt = Opt::from_args();
         let mut my_server = Server::new(Some(opt))?;
@@ -86,7 +94,7 @@ where
                 self.middlewares.into_values().collect(),
             );
             let mut service = http_proxy_service(&my_server.configuration, gateway_entrypoint);
-            let server = format!("127.0.0.1:{}", self.app_port);
+            let server = format!("{}:{}", self.host, self.app_port);
             service.add_tcp(server.as_str());
             info!("Listening on {}", server);
             my_server.add_service(service);
@@ -94,7 +102,7 @@ where
 
         {
             let mut service = http_proxy_service(&my_server.configuration, self.health_check);
-            let server = format!("127.0.0.1:{}", self.health_check_port);
+            let server = format!("{}:{}", self.host, self.health_check_port);
             service.add_tcp(server.as_str());
             info!("Healthcheck listening on {}", server);
             my_server.add_service(service);
