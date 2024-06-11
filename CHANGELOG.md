@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/majksa-dev/rust-gateway/compare/v0.1.0...v0.1.1) (2024-06-11)
+
+
+### Bug Fixes
+
+* update imports ([b0ae9b4](https://github.com/majksa-dev/rust-gateway/commit/b0ae9b465e4577a913e447b435c5c1b6fbe43cbf))
+
 ## 0.1.0 (2024-06-11)
 
 
