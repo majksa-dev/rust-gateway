@@ -86,4 +86,12 @@ pub use gateway::{
     origin::{Origin, OriginResponse, OriginServer, TcpOrigin},
     Error, Next, Result,
 };
-pub use server::app::{builder, ServerBuilder};
+pub use http::{
+    server::{Handler, Server},
+    ReadHeaders, ReadRequest, ReadResponse, Request, Response, WriteHeaders, WriteRequest,
+    WriteResponse,
+};
+pub use server::{
+    app::{builder, ServerBuilder},
+    health_check::HealthCheck,
+};
