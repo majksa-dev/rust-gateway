@@ -1,5 +1,6 @@
 use super::{
     entrypoint::{EntryPoint, Middlewares},
+    origin::OriginResponse,
     Result,
 };
 use crate::{
@@ -9,7 +10,7 @@ use crate::{
 use std::sync::{Arc, Mutex};
 use tokio::{io::ReadHalf, net::TcpStream};
 
-type ResponseWriter = (ReadHalf<TcpStream>, Vec<u8>);
+type ResponseWriter = (OriginResponse, Vec<u8>);
 
 pub struct Next {
     pub entrypoint: Arc<EntryPoint>,

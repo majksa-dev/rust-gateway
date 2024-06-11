@@ -83,6 +83,7 @@ pub(crate) mod utils;
 pub use gateway::{
     entrypoint::EntryPoint,
     middleware::{Context, Middleware, Service},
+    origin::{Origin, OriginResponse, OriginServer, TcpOrigin},
     Error, Next, Result,
 };
 pub use server::app::{builder, ServerBuilder};

@@ -1,6 +1,7 @@
 use tokio::sync::{mpsc, oneshot};
 
 use crate::gateway::entrypoint::{EntryPoint, EntryPointHandler};
+use crate::gateway::origin::{Origin, OriginServer};
 use crate::http::server::Server as HttpServer;
 use crate::http::Request;
 use crate::{Middleware, Service};
@@ -10,12 +11,13 @@ use std::sync::Arc;
 
 use super::health_check::HealthCheck;
 
-pub(crate) type GenerateKey = dyn (Fn(&Request) -> String) + Send + Sync + 'static;
+pub(crate) type GenerateKey = dyn (Fn(&Request) -> Option<String>) + Send + Sync + 'static;
 
 /// A builder for a server.
 pub struct ServerBuilder {
+    origin: Origin,
     generate_peer_key: Box<GenerateKey>,
-    peers: HashMap<String, (Box<SocketAddr>, Box<GenerateKey>)>,
+    peers: HashMap<String, Box<GenerateKey>>,
     middlewares: HashMap<usize, Service>,
     host: IpAddr,
     app_port: u16,
@@ -23,8 +25,9 @@ pub struct ServerBuilder {
 }
 
 impl ServerBuilder {
-    fn new(generate_peer_key: Box<GenerateKey>) -> Self {
+    fn new(generate_peer_key: Box<GenerateKey>, origin: Origin) -> Self {
         Self {
+            origin,
             generate_peer_key,
             peers: HashMap::new(),
             middlewares: HashMap::new(),
@@ -35,17 +38,11 @@ impl ServerBuilder {
     }
 
     /// Register a peer with the given key.
-    pub fn register_peer<F>(
-        mut self,
-        key: String,
-        peer: SocketAddr,
-        endpoint_key_generator: F,
-    ) -> Self
+    pub fn register_peer<F>(mut self, key: String, endpoint_key_generator: F) -> Self
     where
-        F: Fn(&Request) -> String + Send + Sync + 'static,
+        F: Fn(&Request) -> Option<String> + Send + Sync + 'static,
     {
-        self.peers
-            .insert(key, (Box::new(peer), Box::new(endpoint_key_generator)));
+        self.peers.insert(key, Box::new(endpoint_key_generator));
         self
     }
 
@@ -84,6 +81,7 @@ impl ServerBuilder {
     /// The server will listen on the specified ports and will use the specified health check.
     pub fn build(self) -> Server {
         let handler = EntryPointHandler(Arc::new(EntryPoint::new(
+            self.origin,
             self.generate_peer_key,
             self.peers,
             self.middlewares.into_values().collect(),
@@ -133,10 +131,10 @@ impl Server {
 }
 
 /// Create a new server builder with a default health check.
-/// The health check will return a 200 OK response for all requests.
-pub fn builder<F>(generate_peer_key: F) -> ServerBuilder
+pub fn builder<F, O>(origin: O, generate_peer_key: F) -> ServerBuilder
 where
-    F: Fn(&Request) -> String + Send + Sync + 'static,
+    F: Fn(&Request) -> Option<String> + Send + Sync + 'static,
+    O: OriginServer + Send + Sync + 'static,
 {
-    ServerBuilder::new(Box::new(generate_peer_key))
+    ServerBuilder::new(Box::new(generate_peer_key), Box::new(origin))
 }
