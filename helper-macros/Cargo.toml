@@ -20,5 +20,5 @@ proc-macro2 = "1.0.82"
 syn = "2.0.61"
 
 [dev-dependencies]
-trybuild = "1.0.94"
+trybuild = "1.0.96"
 helper = { path = "../helper" }
