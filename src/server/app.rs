@@ -1,49 +1,33 @@
+use tokio::sync::{mpsc, oneshot};
+
+use crate::gateway::entrypoint::{EntryPoint, EntryPointHandler};
+use crate::http::server::Server as HttpServer;
+use crate::http::Request;
+use crate::Service;
 use std::collections::HashMap;
-use std::net::IpAddr;
-
-use essentials::info;
-use pingora::apps::HttpServerApp;
-use pingora::upstreams::peer::HttpPeer;
-use structopt::StructOpt;
-
-use pingora::proxy::{http_proxy_service, HttpProxy, Session};
-use pingora::server::configuration::Opt;
-use pingora::server::Server;
-
-use crate::gateway::entrypoint::EntryPoint;
-use crate::gateway::middleware::AnyMiddleware;
-use crate::Middleware;
+use std::net::{IpAddr, SocketAddr};
+use std::sync::Arc;
 
 use super::health_check::HealthCheck;
 
-pub(crate) type GenerateKey = dyn (Fn(&Session) -> String) + Send + Sync + 'static;
+pub(crate) type GenerateKey = dyn (Fn(&Request) -> String) + Send + Sync + 'static;
 
 /// A builder for a server.
-pub struct ServerBuilder<H: Send + Sync + 'static>
-where
-    HttpProxy<EntryPoint>: HttpServerApp,
-    HttpProxy<H>: HttpServerApp,
-{
+pub struct ServerBuilder {
     generate_peer_key: Box<GenerateKey>,
-    peers: HashMap<String, (Box<HttpPeer>, Box<GenerateKey>)>,
-    middlewares: HashMap<usize, AnyMiddleware>,
-    health_check: H,
+    peers: HashMap<String, (Box<SocketAddr>, Box<GenerateKey>)>,
+    middlewares: HashMap<usize, Service>,
     host: IpAddr,
     app_port: u16,
     health_check_port: u16,
 }
 
-impl<H: Send + Sync + 'static> ServerBuilder<H>
-where
-    HttpProxy<EntryPoint>: HttpServerApp,
-    HttpProxy<H>: HttpServerApp,
-{
-    fn new(generate_peer_key: Box<GenerateKey>, health_check: H) -> Self {
+impl ServerBuilder {
+    fn new(generate_peer_key: Box<GenerateKey>) -> Self {
         Self {
             generate_peer_key,
             peers: HashMap::new(),
             middlewares: HashMap::new(),
-            health_check,
             host: IpAddr::from([127, 0, 0, 1]), // Default host (localhost)
             app_port: 80,
             health_check_port: 9000,
@@ -54,7 +38,7 @@ where
     pub fn register_peer(
         mut self,
         key: String,
-        peer: Box<HttpPeer>,
+        peer: Box<SocketAddr>,
         endpoint_key_generator: Box<GenerateKey>,
     ) -> Self {
         self.peers.insert(key, (peer, endpoint_key_generator));
@@ -62,11 +46,7 @@ where
     }
 
     /// Register a middleware with the given priority.
-    pub fn register_middleware(
-        mut self,
-        priority: usize,
-        middleware: Box<dyn Middleware + Send + Sync + 'static>,
-    ) -> Self {
+    pub fn register_middleware(mut self, priority: usize, middleware: Service) -> Self {
         self.middlewares.insert(priority, middleware);
         self
     }
@@ -94,54 +74,58 @@ where
 
     /// Build the server with the given configuration.
     /// The server will listen on the specified ports and will use the specified health check.
-    pub fn build(self) -> pingora::Result<Server> {
-        let opt = Opt::from_args();
-        let mut my_server = Server::new(Some(opt))?;
-        my_server.bootstrap();
-
-        {
-            let gateway_entrypoint = EntryPoint::new(
-                self.generate_peer_key,
-                self.peers,
-                self.middlewares.into_values().collect(),
-            );
-            let mut service = http_proxy_service(&my_server.configuration, gateway_entrypoint);
-            let server = format!("{}:{}", self.host, self.app_port);
-            service.add_tcp(server.as_str());
-            info!("Listening on {}", server);
-            my_server.add_service(service);
+    pub fn build(self) -> Server {
+        let handler = EntryPointHandler(Arc::new(EntryPoint::new(
+            self.generate_peer_key,
+            self.peers,
+            self.middlewares.into_values().collect(),
+        )));
+        Server {
+            app: HttpServer::new(SocketAddr::new(self.host, self.app_port), handler),
+            health_check: HttpServer::new(
+                SocketAddr::new(self.host, self.health_check_port),
+                HealthCheck,
+            ),
         }
+    }
+}
 
-        {
-            let mut service = http_proxy_service(&my_server.configuration, self.health_check);
-            let server = format!("{}:{}", self.host, self.health_check_port);
-            service.add_tcp(server.as_str());
-            info!("Healthcheck listening on {}", server);
-            my_server.add_service(service);
-        }
-        Ok(my_server)
+pub struct Server {
+    pub app: HttpServer<EntryPointHandler>,
+    pub health_check: HttpServer<HealthCheck>,
+}
+
+impl Server {
+    /// Start the server.
+    pub async fn run(self) {
+        let (tx_app, rx_app) = oneshot::channel();
+        let (tx_health, rx_health) = oneshot::channel();
+        let (tx, mut rx) = mpsc::channel(2);
+        let tx_2 = tx.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = self.app.run() => {
+                    tx_health.send(()).unwrap();
+                }
+                _ = rx_app => {}
+            }
+            let _ = tx.send(()).await;
+        });
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = self.health_check.run() => {
+                    tx_app.send(()).unwrap();
+                }
+                _ = rx_health => {}
+            }
+            let _ = tx_2.send(()).await;
+        });
+        rx.recv().await;
     }
 }
 
 /// Create a new server builder with a default health check.
 /// The health check will return a 200 OK response for all requests.
-pub fn builder(generate_peer_key: Box<GenerateKey>) -> ServerBuilder<HealthCheck>
-where
-    HttpProxy<EntryPoint>: HttpServerApp,
-{
-    builder_with_health_check(generate_peer_key, HealthCheck)
-}
-
-/// Create a new server builder with a custom health check.
-/// The health check must implement the [ProxyHttp](https://docs.rs/pingora/latest/pingora/proxy/trait.ProxyHttp.html) trait.
-/// The health check service wrapped in [HttpProxy](https://docs.rs/pingora/latest/pingora/proxy/struct.HttpProxy.html) must implement the [HttpServerApp](https://docs.rs/pingora/latest/pingora/apps/trait.HttpServerApp.html) trait.
-pub fn builder_with_health_check<H: Send + Sync + 'static>(
-    generate_peer_key: Box<GenerateKey>,
-    health_check: H,
-) -> ServerBuilder<H>
-where
-    HttpProxy<EntryPoint>: HttpServerApp,
-    HttpProxy<H>: HttpServerApp,
-{
-    ServerBuilder::new(generate_peer_key, health_check)
+pub fn builder(generate_peer_key: Box<GenerateKey>) -> ServerBuilder {
+    ServerBuilder::new(generate_peer_key)
 }

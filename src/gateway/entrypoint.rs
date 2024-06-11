@@ -1,155 +1,180 @@
-use std::collections::HashMap;
-
+use super::{middleware::Context, next::Next};
+use crate::{
+    gateway::Error,
+    http::{
+        server::Handler, ReadRequest, ReadResponse, Request, Response, WriteRequest, WriteResponse,
+    },
+    io::{
+        error::{error, CustomError},
+        WriteReader,
+    },
+    server::app::GenerateKey,
+    utils::AsyncAndThen,
+    Service,
+};
 use async_trait::async_trait;
-use essentials::error;
-use pingora::{
-    http::{RequestHeader, ResponseHeader},
-    proxy::{ProxyHttp, Session},
-    upstreams::peer::HttpPeer,
-    Error, ErrorType, Result,
+use std::result::Result as StdResult;
+use std::{
+    collections::{HashMap, VecDeque},
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
+use tokio::{
+    io::{self, AsyncWriteExt, BufReader, ReadHalf},
+    net::TcpStream,
 };
 
-use crate::server::app::GenerateKey;
+pub type Middlewares = VecDeque<Arc<Service>>;
 
-use super::middleware::{AnyContext, AnyMiddleware};
+pub struct EntryPointHandler(pub Arc<EntryPoint>);
+
+#[async_trait]
+impl Handler for EntryPointHandler {
+    async fn handle(&self, left: TcpStream) {
+        let (left_rx, mut left_tx) = io::split(left);
+        match EntryPoint::handle(&self.0, left_rx).await {
+            Ok((response, right_rx, right_remains)) => {
+                if let Err(err) = left_tx
+                    .write_response(&response)
+                    .await
+                    .async_and_then(|_| async {
+                        if response.forward_body {
+                            left_tx.write_all(right_remains.as_slice()).await
+                        } else {
+                            Ok(())
+                        }
+                    })
+                    .await
+                    .map(|_| left_tx.write_reader(right_rx))
+                {
+                    essentials::warn!("{}", err);
+                }
+            }
+            Err(err) => {
+                essentials::error!("{}", err);
+                if let Err(err) = left_tx
+                    .write_all("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n".as_bytes())
+                    .await
+                {
+                    essentials::warn!("{}", err);
+                }
+            }
+        };
+    }
+}
 
 pub struct EntryPoint {
     generate_peer_key: Box<GenerateKey>,
-    peers: HashMap<String, (Box<HttpPeer>, Box<GenerateKey>)>,
-    middlewares: Vec<AnyMiddleware>,
+    peers: HashMap<String, (Box<SocketAddr>, Box<GenerateKey>)>,
+    middlewares: Middlewares,
 }
+
+unsafe impl Sync for EntryPoint {}
+unsafe impl Send for EntryPoint {}
+
+type Result<T> = StdResult<T, Error>;
 
 impl EntryPoint {
     pub fn new(
         generate_peer_key: Box<GenerateKey>,
-        peers: HashMap<String, (Box<HttpPeer>, Box<GenerateKey>)>,
-        middlewares: Vec<AnyMiddleware>,
+        peers: HashMap<String, (Box<SocketAddr>, Box<GenerateKey>)>,
+        middlewares: VecDeque<Service>,
     ) -> Self {
         Self {
             generate_peer_key,
             peers,
-            middlewares,
+            middlewares: middlewares.into_iter().map(Arc::new).collect(),
         }
     }
-}
 
-#[derive(Default)]
-pub struct Ctx {
-    context: Option<Context>,
-    middleware_contexts: Vec<AnyContext>,
-    peer: Option<Box<HttpPeer>>,
-}
-
-impl Ctx {
-    pub fn new(contexts: Vec<AnyContext>) -> Self {
-        Ctx {
-            middleware_contexts: contexts,
-            ..Default::default()
-        }
-    }
-}
-
-unsafe impl Send for Ctx {}
-unsafe impl Sync for Ctx {}
-
-pub struct Context {
-    pub id: String,
-    pub endpoint: String,
-}
-
-#[async_trait]
-impl ProxyHttp for EntryPoint {
-    type CTX = Ctx;
-
-    fn new_ctx(&self) -> Self::CTX {
-        Ctx::new(self.middlewares.iter().map(|m| m.new_ctx()).collect())
+    async fn connect_to_stream(
+        entrypoint: Arc<Self>,
+        context: Arc<Context>,
+        request: Request,
+        left_rx: ReadHalf<TcpStream>,
+        left_remains: Vec<u8>,
+    ) -> Result<(Response, ReadHalf<TcpStream>, Vec<u8>)> {
+        let right = entrypoint
+            .peers
+            .get(&context.app_id)
+            .ok_or(error(CustomError::PeerConnection))
+            .map(|addr| addr.0.to_string())
+            .async_and_then(TcpStream::connect)
+            .await
+            .map_err(Error::io)?;
+        let (mut right_rx, mut right_tx) = io::split(right);
+        right_tx.write_request(&request).await.map_err(Error::io)?;
+        right_tx
+            .write_all(left_remains.as_slice())
+            .await
+            .map_err(Error::io)?;
+        right_tx.write_reader(left_rx);
+        let mut response_reader = BufReader::new(&mut right_rx);
+        let response = response_reader.read_response().await.map_err(Error::io)?;
+        let right_remains = response_reader.buffer().to_vec();
+        Ok((response, right_rx, right_remains))
     }
 
-    async fn request_filter(&self, session: &mut Session, ctx: &mut Self::CTX) -> Result<bool> {
-        let id = (self.generate_peer_key)(session);
-        let peer = match self.peers.get(&id) {
-            Some(peer) => peer,
+    pub async fn next(
+        entrypoint: Arc<Self>,
+        context: Arc<Context>,
+        request: Request,
+        left_rx: ReadHalf<TcpStream>,
+        left_remains: Vec<u8>,
+        mut it: Middlewares,
+    ) -> Result<(Response, ReadHalf<TcpStream>, Vec<u8>)> {
+        match it.pop_back() {
+            Some(middleware) => {
+                let right = Arc::new(Mutex::new(Option::<(ReadHalf<TcpStream>, Vec<u8>)>::None));
+                let next = Next {
+                    entrypoint: entrypoint.clone(),
+                    context: context.clone(),
+                    left: left_rx,
+                    left_remains,
+                    right: right.clone(),
+                    it,
+                };
+                let response = middleware.run(context, request, next).await?;
+                let right = right
+                    .lock()
+                    .map_err(|_| Error::new("Mutex poisoned when returning right stream"))?
+                    .take()
+                    .ok_or(Error::new("Mutex poisoned when returning right stream"))?;
+                Ok((response, right.0, right.1))
+            }
             None => {
-                session.respond_error(502).await;
-                return Ok(true);
+                Self::connect_to_stream(entrypoint.clone(), context, request, left_rx, left_remains)
+                    .await
             }
-        };
+        }
+    }
+
+    pub async fn handle(
+        entrypoint: &Arc<Self>,
+        mut left_rx: ReadHalf<TcpStream>,
+    ) -> Result<(Response, ReadHalf<TcpStream>, Vec<u8>)> {
+        let mut request_reader = BufReader::new(&mut left_rx);
+        let request = request_reader.read_request().await.map_err(Error::io)?;
+        let app_id = (entrypoint.generate_peer_key)(&request);
+        let endpoint_id = (entrypoint
+            .peers
+            .get(&app_id)
+            .ok_or(Error::new("No endpoint matched given request"))?
+            .1)(&request);
         let context = Context {
-            id,
-            endpoint: (peer.1)(session),
+            app_id,
+            endpoint_id,
         };
-        for (controller, ctx) in self
-            .middlewares
-            .iter()
-            .zip(ctx.middleware_contexts.iter_mut())
-        {
-            match controller.filter(session, (&context, ctx)).await {
-                Ok(Some(response)) => {
-                    session.write_response_header(Box::new(response)).await?;
-                    return Ok(true);
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    error!("filter error: {:?}", e);
-                }
-            }
-        }
-        ctx.peer = Some(peer.0.clone());
-        ctx.context = Some(context);
-        Ok(false)
-    }
-
-    async fn upstream_peer(
-        &self,
-        _session: &mut Session,
-        ctx: &mut Self::CTX,
-    ) -> Result<Box<HttpPeer>> {
-        ctx.peer
-            .take()
-            .ok_or_else(|| Error::new(ErrorType::ConnectProxyFailure))
-    }
-
-    async fn upstream_request_filter(
-        &self,
-        session: &mut Session,
-        request: &mut RequestHeader,
-        ctx: &mut Self::CTX,
-    ) -> Result<()> {
-        let context = ctx.context.as_ref().unwrap();
-        for (controller, ctx) in self
-            .middlewares
-            .iter()
-            .zip(ctx.middleware_contexts.iter_mut())
-        {
-            if let Err(e) = controller
-                .modify_request(session, request, (context, ctx))
-                .await
-            {
-                error!("modify request error: {:?}", e);
-            }
-        }
-        Ok(())
-    }
-
-    async fn response_filter(
-        &self,
-        session: &mut Session,
-        response: &mut ResponseHeader,
-        ctx: &mut Self::CTX,
-    ) -> Result<()> {
-        let context = ctx.context.as_ref().unwrap();
-        for (controller, ctx) in self
-            .middlewares
-            .iter()
-            .zip(ctx.middleware_contexts.iter_mut())
-        {
-            if let Err(e) = controller
-                .modify_response(session, response, (context, ctx))
-                .await
-            {
-                error!("modify response error: {:?}", e);
-            }
-        }
-        Ok(())
+        let left_remains = request_reader.buffer().to_vec();
+        let it = entrypoint.middlewares.clone();
+        Self::next(
+            entrypoint.clone(),
+            Arc::new(context),
+            request,
+            left_rx,
+            left_remains,
+            it,
+        )
+        .await
     }
 }

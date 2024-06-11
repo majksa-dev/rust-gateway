@@ -74,8 +74,15 @@
 #[cfg(feature = "cors")]
 pub mod cors;
 pub(crate) mod gateway;
+pub mod http;
+pub mod io;
 pub(crate) mod server;
+pub mod thread;
+pub(crate) mod utils;
 
-pub use gateway::entrypoint::Context;
-pub use gateway::middleware::{AnyContext, Middleware};
-pub use server::app::{builder, builder_with_health_check, ServerBuilder};
+pub use gateway::{
+    entrypoint::EntryPoint,
+    middleware::{Context, Middleware, Service},
+    Error, Next, Result,
+};
+pub use server::app::{builder, ServerBuilder};

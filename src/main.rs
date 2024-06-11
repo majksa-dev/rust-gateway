@@ -1,75 +1,44 @@
-use std::{
-    env,
-    net::{IpAddr, SocketAddr},
-};
-
 use async_trait::async_trait;
 use gateway::{
-    cors::{Cors, CorsConfig},
-    AnyContext, Context, Middleware,
+    http::{Request, Response},
+    Context, Middleware, Next, Result,
 };
 use http::header;
-use pingora::{
-    http::{ResponseHeader, StatusCode},
-    proxy::Session,
-    upstreams::peer::HttpPeer,
-    Result,
-};
+use std::{env, net::SocketAddr, sync::Arc};
 
 struct Gateway;
 
-struct Ctx;
-
 #[async_trait]
 impl Middleware for Gateway {
-    fn new_ctx(&self) -> AnyContext {
-        Box::new(Ctx)
-    }
-
-    async fn filter(
-        &self,
-        _session: &Session,
-        _context: (&Context, &mut AnyContext),
-    ) -> Result<Option<ResponseHeader>> {
-        let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
-        response.insert_header(header::SERVER, "Example")?;
-        Ok(Some(response))
+    async fn run(&self, _ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {
+        let mut response = next.run(request).await?;
+        response.insert_header("X-Server", "Rust").unwrap();
+        response.insert_header(header::CONNECTION, "close").unwrap();
+        Ok(response)
     }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
+    env::set_var("RUST_LOG", "info");
     essentials::install();
-    let middleware = Box::new(Cors(CorsConfig {
-        config: Default::default(),
-    }));
-    gateway::builder(Box::new(|session| {
-        let mut host = session
-            .get_header("Host")
-            .and_then(|host| host.to_str().ok())
-            .unwrap_or("")
-            .to_string();
-        host.truncate(host.find('.').unwrap_or(host.len()));
-        host
+    gateway::builder(Box::new(|request| {
+        request
+            .headers
+            .get("X-App")
+            .unwrap_or(&header::HeaderValue::from_static("app"))
+            .to_str()
+            .unwrap()
+            .to_string()
     }))
-    .with_app_port(
-        env::var("PORT")
-            .ok()
-            .unwrap_or("80".to_string())
-            .parse()
-            .unwrap_or(80),
-    )
-    // .register_middleware(1, Box::new(Gateway))
     .register_peer(
-        "hello".to_string(),
-        Box::new(HttpPeer::new(
-            SocketAddr::new(IpAddr::from([127, 0, 0, 1]), 8083),
-            false,
-            "localhost".to_string(),
-        )),
-        Box::new(|session| session.req_header().uri.path().to_string()),
+        "app".to_string(),
+        Box::new("127.0.0.1:7979".parse::<SocketAddr>().unwrap()),
+        Box::new(|request| request.path.clone()),
     )
-    .register_middleware(1, middleware)
+    .register_middleware(1, Box::new(Gateway))
+    .with_app_port(7878)
     .build()
-    .unwrap()
-    .run_forever();
+    .run()
+    .await;
 }

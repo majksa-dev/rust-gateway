@@ -1,27 +1,17 @@
 use async_trait::async_trait;
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
-use pingora::proxy::{ProxyHttp, Session};
-use pingora::upstreams::peer::HttpPeer;
-use pingora::{Error, ErrorType, Result};
-
+use crate::http::server::Handler;
 pub struct HealthCheck;
 
 #[async_trait]
-impl ProxyHttp for HealthCheck {
-    type CTX = ();
-
-    fn new_ctx(&self) -> Self::CTX {}
-
-    async fn request_filter(&self, session: &mut Session, _ctx: &mut Self::CTX) -> Result<bool> {
-        session.respond_error(200).await;
-        Ok(true)
-    }
-
-    async fn upstream_peer(
-        &self,
-        _session: &mut Session,
-        _ctx: &mut Self::CTX,
-    ) -> Result<Box<HttpPeer>> {
-        Err(Error::new(ErrorType::ConnectProxyFailure))
+impl Handler for HealthCheck {
+    async fn handle(&self, mut stream: TcpStream) {
+        if let Err(e) = stream
+            .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+            .await
+        {
+            essentials::error!("Failed to write to stream: {:?}", e);
+        }
     }
 }
