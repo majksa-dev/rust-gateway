@@ -15,9 +15,6 @@ use http::{header, StatusCode};
 #[derive(Debug)]
 pub struct Cors(pub CorsConfig);
 
-unsafe impl Send for Cors {}
-unsafe impl Sync for Cors {}
-
 #[async_trait]
 impl Middleware for Cors {
     async fn run(&self, ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {

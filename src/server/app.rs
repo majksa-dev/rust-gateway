@@ -3,7 +3,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::gateway::entrypoint::{EntryPoint, EntryPointHandler};
 use crate::http::server::Server as HttpServer;
 use crate::http::Request;
-use crate::Service;
+use crate::{Middleware, Service};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
@@ -35,19 +35,27 @@ impl ServerBuilder {
     }
 
     /// Register a peer with the given key.
-    pub fn register_peer(
+    pub fn register_peer<F>(
         mut self,
         key: String,
-        peer: Box<SocketAddr>,
-        endpoint_key_generator: Box<GenerateKey>,
-    ) -> Self {
-        self.peers.insert(key, (peer, endpoint_key_generator));
+        peer: SocketAddr,
+        endpoint_key_generator: F,
+    ) -> Self
+    where
+        F: Fn(&Request) -> String + Send + Sync + 'static,
+    {
+        self.peers
+            .insert(key, (Box::new(peer), Box::new(endpoint_key_generator)));
         self
     }
 
     /// Register a middleware with the given priority.
-    pub fn register_middleware(mut self, priority: usize, middleware: Service) -> Self {
-        self.middlewares.insert(priority, middleware);
+    pub fn register_middleware<M: Middleware + Send + Sync + 'static>(
+        mut self,
+        priority: usize,
+        middleware: M,
+    ) -> Self {
+        self.middlewares.insert(priority, Box::new(middleware));
         self
     }
 
@@ -126,6 +134,9 @@ impl Server {
 
 /// Create a new server builder with a default health check.
 /// The health check will return a 200 OK response for all requests.
-pub fn builder(generate_peer_key: Box<GenerateKey>) -> ServerBuilder {
-    ServerBuilder::new(generate_peer_key)
+pub fn builder<F>(generate_peer_key: F) -> ServerBuilder
+where
+    F: Fn(&Request) -> String + Send + Sync + 'static,
+{
+    ServerBuilder::new(Box::new(generate_peer_key))
 }

@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use gateway::{
+    cors::{Cors, CorsConfig},
     http::{Request, Response},
     Context, Middleware, Next, Result,
 };
 use http::header;
-use std::{env, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
 
 struct Gateway;
 
@@ -22,7 +23,7 @@ impl Middleware for Gateway {
 async fn main() {
     env::set_var("RUST_LOG", "info");
     essentials::install();
-    gateway::builder(Box::new(|request| {
+    gateway::builder(|request| {
         request
             .headers
             .get("X-App")
@@ -30,13 +31,19 @@ async fn main() {
             .to_str()
             .unwrap()
             .to_string()
-    }))
+    })
     .register_peer(
         "app".to_string(),
-        Box::new("127.0.0.1:7979".parse::<SocketAddr>().unwrap()),
-        Box::new(|request| request.path.clone()),
+        "127.0.0.1:7979".parse::<SocketAddr>().unwrap(),
+        |request| request.path.clone(),
     )
-    .register_middleware(1, Box::new(Gateway))
+    .register_middleware(1, Gateway)
+    .register_middleware(
+        2,
+        Cors(CorsConfig {
+            config: HashMap::new(),
+        }),
+    )
     .with_app_port(7878)
     .build()
     .run()
