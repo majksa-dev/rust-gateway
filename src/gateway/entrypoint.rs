@@ -49,12 +49,17 @@ impl Handler for EntryPointHandler {
                     essentials::warn!("{}", err);
                 }
             }
-            Err(err) => {
+            Err(Error::Message(err)) => {
                 essentials::error!("{}", err);
                 if let Err(err) = left_tx
                     .write_all("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n".as_bytes())
                     .await
                 {
+                    essentials::warn!("{}", err);
+                }
+            }
+            Err(Error::HttpStatus(status)) => {
+                if let Err(err) = left_tx.write_response(&Response::new(status)).await {
                     essentials::warn!("{}", err);
                 }
             }
