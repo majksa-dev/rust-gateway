@@ -17,15 +17,9 @@ essentials = { tag = "v0.3.1", git = "https://github.com/majksa-dev/rust-essenti
 
 [dependencies]
 essentials.workspace = true
-serde = "1.0.203"
-serde_json = "1.0.114"
-pingora = { version = "0.2.0", features = ["proxy"] }
-regex = "1.10.3"
 async-trait = "0.1.77"
 structopt = "0.3.26"
-redis = "0.25.0"
 tokio = { version = "1", features = ["full"] }
-snedfile = { version = "0.1", features = ["large-files"]}
 http = "1.1.0"
 
 [dev-dependencies]
@@ -34,3 +28,5 @@ wiremock = "0.6.0"
 tokio = { version = "1", features = ["full"] }
 assert_fs = { version = "1.1.1", features = ["color"] }
 surf = "2.3.2"
+serde = "1.0.203"
+serde_json = "1.0.114"
