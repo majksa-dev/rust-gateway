@@ -87,11 +87,11 @@ pub use gateway::{
     Error, Next, Result,
 };
 pub use http::{
-    server::{Handler, Server},
+    server::{Handler, Server as HttpServer},
     ReadHeaders, ReadRequest, ReadResponse, Request, Response, WriteHeaders, WriteRequest,
     WriteResponse,
 };
 pub use server::{
-    app::{builder, ServerBuilder},
+    app::{builder, Server, ServerBuilder},
     health_check::HealthCheck,
 };
