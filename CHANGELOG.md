@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/majksa-dev/rust-gateway/compare/v0.1.2...v0.1.3) (2024-06-11)
+
+
+### Bug Fixes
+
+* handle returning status code error as ok ([30ae6a6](https://github.com/majksa-dev/rust-gateway/commit/30ae6a69a38d04ae6ff7f8818549d7d161a06b74))
+
 ## [0.1.2](https://github.com/majksa-dev/rust-gateway/compare/v0.1.1...v0.1.2) (2024-06-11)
 
 
