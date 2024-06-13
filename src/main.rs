@@ -31,7 +31,7 @@ async fn main() {
         |request| {
             request
                 .headers
-                .get("X-App")
+                .get(header::HOST)
                 .and_then(|value| value.to_str().ok())
                 .map(|x| x.to_string())
         },

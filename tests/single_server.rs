@@ -5,7 +5,6 @@ use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use testing_utils::macros as utils;
 use testing_utils::surf;
 use tokio::task::JoinHandle;
@@ -20,7 +19,7 @@ struct Context {
 
 async fn before_each() -> Context {
     if env::var("CI").is_err() {
-        env::set_var("RUST_LOG", "warn");
+        env::set_var("RUST_LOG", "trace");
         env::set_var("RUST_BACKTRACE", "0");
         env::set_var("APP_ENV", "d");
         essentials::install();
@@ -49,19 +48,24 @@ async fn before_each() -> Context {
     )
     .with_app_port(ports[0])
     .with_health_check_port(ports[1])
-    .register_peer("app".to_string(), |request| Some(request.path.clone()))
+    .register_peer("app".to_string(), |request| match request.path.as_str() {
+        "/hello" => Some("hello".to_string()),
+        _ => None,
+    })
     .register_middleware(
         1,
         cors::Middleware(cors::Config::new(HashMap::from([(
             "app".to_string(),
-            Arc::new(cors::AppConfig::new(
+            cors::AppConfig::new(
                 cors::ConfigRules::new(
-                    vec![http::Method::GET],
                     vec![],
                     vec![cors::Auth::new("token", vec!["http://localhost:3000"])],
                 ),
-                HashMap::new(),
-            )),
+                HashMap::from([(
+                    "hello".to_string(),
+                    cors::ConfigRules::new(vec![http::Method::GET], vec![]),
+                )]),
+            ),
         )]))),
     )
     .build();

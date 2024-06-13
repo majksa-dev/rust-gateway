@@ -1,14 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use http::Method;
 
 #[derive(Debug)]
 pub struct Config {
-    pub config: HashMap<String, Arc<AppConfig>>,
+    pub config: HashMap<String, AppConfig>,
 }
 
 impl Config {
-    pub fn new(config: HashMap<String, Arc<AppConfig>>) -> Self {
+    pub fn new(config: HashMap<String, AppConfig>) -> Self {
         Self { config }
     }
 }
@@ -31,47 +31,22 @@ impl AppConfig {
 #[derive(Debug)]
 pub struct ConfigRules {
     pub methods: Vec<Method>,
-    pub headers: Vec<String>,
     pub auth: Vec<Auth>,
 }
 
 impl ConfigRules {
-    pub fn new(methods: Vec<Method>, headers: Vec<String>, auth: Vec<Auth>) -> Self {
-        Self {
-            methods,
-            headers,
-            auth,
-        }
+    pub fn new(methods: Vec<Method>, auth: Vec<Auth>) -> Self {
+        Self { methods, auth }
     }
 }
 
-pub enum AllowedResult {
-    Allowed,
-    Forbidden,
-    NotFound,
-    MethodNotAllowed,
-}
-
 impl ConfigRules {
-    pub fn is_allowed(&self, origin: &str, token: &str, method: &Method) -> AllowedResult {
-        if method != Method::OPTIONS && !self.methods.contains(method) {
-            return AllowedResult::MethodNotAllowed;
-        }
-        self.auth
-            .iter()
-            .find(|auth| auth.token == token)
-            .map(|auth| {
-                auth.origins
-                    .iter()
-                    .any(|allowed_origin| origin == allowed_origin)
-            })
-            .map_or(AllowedResult::NotFound, |allowed| {
-                if allowed {
-                    AllowedResult::Allowed
-                } else {
-                    AllowedResult::Forbidden
-                }
-            })
+    pub fn is_method_allowed(&self, method: &Method) -> bool {
+        method == Method::OPTIONS || self.methods.contains(method)
+    }
+
+    pub fn find_auth(&self, token: impl AsRef<str>) -> Option<&Auth> {
+        self.auth.iter().find(|auth| auth.token == token.as_ref())
     }
 }
 
@@ -90,5 +65,11 @@ impl Auth {
                 .map(|origin| origin.as_ref().to_string())
                 .collect(),
         }
+    }
+
+    pub fn is_origin_allowed(&self, origin: impl AsRef<str>) -> bool {
+        self.origins
+            .iter()
+            .any(|allowed_origin| allowed_origin == origin.as_ref())
     }
 }
