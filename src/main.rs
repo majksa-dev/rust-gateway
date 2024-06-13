@@ -40,7 +40,7 @@ async fn main() {
     .register_middleware(1, Gateway)
     .register_middleware(
         2,
-        cors::Middleware(cors::Config {
+        cors::Middleware::new(cors::Config {
             config: HashMap::new(),
         }),
     )

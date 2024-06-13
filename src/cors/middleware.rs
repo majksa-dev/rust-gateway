@@ -14,14 +14,22 @@ use async_trait::async_trait;
 use http::{header, StatusCode};
 
 #[derive(Debug)]
-pub struct Middleware(pub config::Config);
+pub struct Middleware {
+    config: config::Config,
+}
+
+impl Middleware {
+    pub fn new(config: config::Config) -> Self {
+        Self { config }
+    }
+}
 
 #[async_trait]
 impl TMiddleware for Middleware {
     async fn run(&self, ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {
         let method = request.method.clone();
         let config = self
-            .0
+            .config
             .config
             .get(&ctx.app_id)
             .ok_or(Error::status(StatusCode::UNAUTHORIZED))?;

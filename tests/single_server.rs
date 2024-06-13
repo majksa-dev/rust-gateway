@@ -54,7 +54,7 @@ async fn before_each() -> Context {
     })
     .register_middleware(
         1,
-        cors::Middleware(cors::Config::new(HashMap::from([(
+        cors::Middleware::new(cors::Config::new(HashMap::from([(
             "app".to_string(),
             cors::AppConfig::new(
                 cors::ConfigRules::new(
