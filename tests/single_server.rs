@@ -59,7 +59,10 @@ async fn before_each() -> Context {
             cors::AppConfig::new(
                 cors::ConfigRules::new(
                     vec![],
-                    vec![cors::Auth::new("token", vec!["http://localhost:3000"])],
+                    vec![cors::Auth::new(
+                        "token".to_string(),
+                        vec!["http://localhost:3000".to_string()],
+                    )],
                 ),
                 HashMap::from([(
                     "hello".to_string(),

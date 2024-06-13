@@ -57,14 +57,8 @@ pub struct Auth {
 }
 
 impl Auth {
-    pub fn new(token: impl AsRef<str>, origins: Vec<impl AsRef<str>>) -> Self {
-        Self {
-            token: token.as_ref().to_string(),
-            origins: origins
-                .into_iter()
-                .map(|origin| origin.as_ref().to_string())
-                .collect(),
-        }
+    pub fn new(token: String, origins: Vec<String>) -> Self {
+        Self { token, origins }
     }
 
     pub fn is_origin_allowed(&self, origin: impl AsRef<str>) -> bool {
