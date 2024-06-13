@@ -138,15 +138,16 @@ impl EntryPoint {
         let request = request_reader.read_request().await.map_err(Error::io)?;
         let app_id = match (entrypoint.generate_peer_key)(&request) {
             Some(app) => app,
-            None => Err(Error::status(StatusCode::BAD_REQUEST))?,
+            None => Err(Error::status(StatusCode::BAD_GATEWAY))?,
         };
         let endpoint_id = match (entrypoint
             .peers
             .get(&app_id)
-            .ok_or(Error::status(StatusCode::NOT_FOUND))?)(&request)
-        {
+            .ok_or(Error::status(StatusCode::BAD_GATEWAY))?)(
+            &request
+        ) {
             Some(endpoint_id) => endpoint_id,
-            None => Err(Error::status(StatusCode::BAD_REQUEST))?,
+            None => Err(Error::status(StatusCode::NOT_FOUND))?,
         };
         let context = Context {
             app_id,

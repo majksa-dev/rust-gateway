@@ -3,73 +3,57 @@
 //! # Example usage
 //!
 //! ```
-//! use std::{
-//!     env,
-//!     net::{IpAddr, SocketAddr},
-//! };
-//!
 //! use async_trait::async_trait;
-//! use gateway::{Middleware, Context, AnyContext};
-//! use http::header;
-//! use pingora::{
-//!     http::{ResponseHeader, StatusCode},
-//!     proxy::Session,
-//!     upstreams::peer::HttpPeer,
-//!     Result,
+//! use gateway::{
+//!     cors,
+//!     http::{Request, Response},
+//!     Context, Middleware, Next, Result, TcpOrigin,
 //! };
-//!
+//! use http::header;
+//! use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
+
 //! struct Gateway;
-//!
-//! struct Ctx;
-//!
+
 //! #[async_trait]
 //! impl Middleware for Gateway {
-//!     fn new_ctx(&self) -> AnyContext {
-//!         Box::new(Ctx)
-//!     }
-//!
-//!     async fn filter(
-//!         &self,
-//!         _session: &Session,
-//!         _context: (&Context, &mut AnyContext),
-//!     ) -> Result<Option<ResponseHeader>> {
-//!         let mut response = ResponseHeader::build(StatusCode::OK, Some(2))?;
-//!         response.insert_header(header::SERVER, "Example")?;
-//!         Ok(Some(response))
+//!     async fn run(&self, _ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {
+//!         let mut response = next.run(request).await?;
+//!         response.insert_header("X-Server", "Rust").unwrap();
+//!         response.insert_header(header::CONNECTION, "close").unwrap();
+//!         Ok(response)
 //!     }
 //! }
-//!
-//! fn generate_peer_key(session: &Session) -> String {
-//!     let mut host = session
-//!         .get_header("Host")
-//!         .and_then(|host| host.to_str().ok())
-//!         .unwrap_or("")
-//!         .to_string();
-//!     host.truncate(host.find('.').unwrap_or(host.len()));
-//!     host
-//! }
-//! essentials::install();
-//! gateway::builder(Box::new(generate_peer_key))
-//!     .with_app_port(
-//!         env::var("PORT")
-//!             .ok()
-//!             .unwrap_or("80".to_string())
-//!             .parse()
-//!             .unwrap_or(80),
+
+//! #[tokio::main]
+//! async fn main() {
+//!     env::set_var("RUST_LOG", "info");
+//!     essentials::install();
+//!     gateway::builder(
+//!         TcpOrigin::new(HashMap::from([(
+//!             "app".to_string(),
+//!             Box::new("127.0.0.1:8081".parse::<SocketAddr>().unwrap()),
+//!         )])),
+//!         |request| {
+//!             request
+//!                 .headers
+//!                 .get("X-App")
+//!                 .and_then(|value| value.to_str().ok())
+//!                 .map(|x| x.to_string())
+//!         },
 //!     )
-//!     .register_middleware(1, Box::new(Gateway))
-//!     .register_peer(
-//!         "hello".to_string(),
-//!         Box::new(HttpPeer::new(
-//!             SocketAddr::new(IpAddr::from([127, 0, 0, 1]), 8083),
-//!             false,
-//!             "localhost".to_string(),
-//!         )),
-//!         Box::new(|session| session.req_header().uri.path().to_string()),
+//!     .register_peer("app".to_string(), |request| Some(request.path.clone()))
+//!     .register_middleware(1, Gateway)
+//!     .register_middleware(
+//!         2,
+//!         cors::Middleware(cors::Config {
+//!             config: HashMap::new(),
+//!         }),
 //!     )
+//!     .with_app_port(8080)
 //!     .build()
-//!     .unwrap()
-//!     .run_forever();
+//!     .run()
+//!     .await;
+//! }
 //! ```
 #[cfg(feature = "cors")]
 pub mod cors;

@@ -1,28 +1,29 @@
 use std::sync::Arc;
 
-use super::{config::AllowedResult, CorsConfig};
+use super::config;
 use crate::{
     gateway::{
-        middleware::{Context, Middleware},
+        middleware::{Context, Middleware as TMiddleware},
         next::Next,
         Result,
     },
     http::{Request, Response},
+    Error,
 };
 use async_trait::async_trait;
 use http::{header, StatusCode};
 
 #[derive(Debug)]
-pub struct Cors(pub CorsConfig);
+pub struct Middleware(pub config::Config);
 
 #[async_trait]
-impl Middleware for Cors {
+impl TMiddleware for Middleware {
     async fn run(&self, ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {
         let method = request.method.clone();
         let config = match self.0.config.get(&ctx.app_id) {
             Some(config) => config.clone(),
             None => {
-                return Ok(Response::new(StatusCode::UNAUTHORIZED));
+                return Err(Error::status(StatusCode::UNAUTHORIZED));
             }
         };
         let origin = match request
@@ -33,7 +34,7 @@ impl Middleware for Cors {
         {
             Some(origin) => origin,
             None => {
-                return Ok(Response::new(StatusCode::BAD_REQUEST));
+                return Err(Error::status(StatusCode::BAD_REQUEST));
             }
         };
         let token = match request
@@ -44,40 +45,41 @@ impl Middleware for Cors {
         {
             Some(token) => token,
             None => {
-                return Ok(Response::new(StatusCode::BAD_REQUEST));
+                return Err(Error::status(StatusCode::BAD_REQUEST));
             }
         };
+        use config::AllowedResult::*;
         let rules = match config
             .rules
             .is_allowed(origin.as_str(), token.as_str(), &method)
         {
-            AllowedResult::Allowed => &config.rules,
-            AllowedResult::MethodNotAllowed => {
-                return Ok(Response::new(StatusCode::METHOD_NOT_ALLOWED));
+            Allowed => &config.rules,
+            MethodNotAllowed => {
+                return Err(Error::status(StatusCode::METHOD_NOT_ALLOWED));
             }
-            AllowedResult::Forbidden => {
-                return Ok(Response::new(StatusCode::FORBIDDEN));
+            Forbidden => {
+                return Err(Error::status(StatusCode::FORBIDDEN));
             }
-            AllowedResult::NotFound => {
+            NotFound => {
                 let endpoint = match config.endpoints.get(&ctx.endpoint_id) {
                     Some(endpoint) => endpoint,
                     None => {
-                        return Ok(Response::new(StatusCode::UNAUTHORIZED));
+                        return Err(Error::status(StatusCode::UNAUTHORIZED));
                     }
                 };
                 match config
                     .rules
                     .is_allowed(origin.as_str(), token.as_str(), &method)
                 {
-                    AllowedResult::Allowed => endpoint,
-                    AllowedResult::MethodNotAllowed => {
-                        return Ok(Response::new(StatusCode::METHOD_NOT_ALLOWED));
+                    Allowed => endpoint,
+                    MethodNotAllowed => {
+                        return Err(Error::status(StatusCode::METHOD_NOT_ALLOWED));
                     }
-                    AllowedResult::Forbidden => {
-                        return Ok(Response::new(StatusCode::FORBIDDEN));
+                    Forbidden => {
+                        return Err(Error::status(StatusCode::FORBIDDEN));
                     }
-                    AllowedResult::NotFound => {
-                        return Ok(Response::new(StatusCode::UNAUTHORIZED));
+                    NotFound => {
+                        return Err(Error::status(StatusCode::UNAUTHORIZED));
                     }
                 }
             }

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use gateway::{
-    cors::{Cors, CorsConfig},
+    cors,
     http::{Request, Response},
     Context, Middleware, Next, Result, TcpOrigin,
 };
@@ -40,7 +40,7 @@ async fn main() {
     .register_middleware(1, Gateway)
     .register_middleware(
         2,
-        Cors(CorsConfig {
+        cors::Middleware(cors::Config {
             config: HashMap::new(),
         }),
     )

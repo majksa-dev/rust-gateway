@@ -17,9 +17,11 @@ need_stdout = false
 
 [jobs.test]
 command = [
-    "cargo", "nextest", "run",
+    "cargo", "test",
     "--color", "always",
+    "--", "--color", "always",
 ]
+env.CI = "true"
 need_stdout = true
 
 [jobs.doc]
