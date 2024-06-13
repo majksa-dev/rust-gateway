@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.2.0](https://github.com/majksa-dev/rust-gateway/compare/v0.1.3...v0.2.0) (2024-06-13)
+
+
+### Features
+
+* implement custom server, add cors logic, remove old libraries and write tests using testing utils ([859bfdc](https://github.com/majksa-dev/rust-gateway/commit/859bfdc9cb9a1adccedf50bca64c13369784b54f))
+
+
+### Bug Fixes
+
+* **deps:** bump proc-macro2 from 1.0.82 to 1.0.85 ([2d6e6c3](https://github.com/majksa-dev/rust-gateway/commit/2d6e6c333fb492e6fe35b084398adfe5b3fe23b4))
+* **deps:** bump tokio from 1.37.0 to 1.38.0 ([10ffd20](https://github.com/majksa-dev/rust-gateway/commit/10ffd20d4d8db2df6329ca05069e2ee0c99dcdb6))
+* remove unused dependencies ([a006029](https://github.com/majksa-dev/rust-gateway/commit/a0060294f1cab8d48149180b6a75d9d4eb70652f))
+
 ## [0.1.3](https://github.com/majksa-dev/rust-gateway/compare/v0.1.2...v0.1.3) (2024-06-11)
 
 
