@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/majksa-dev/rust-gateway/compare/v0.2.0...v0.2.1) (2024-06-13)
+
+
+### Bug Fixes
+
+* improve cors config ([a2de8e5](https://github.com/majksa-dev/rust-gateway/commit/a2de8e5f8f5940d8e83efb8387f16aed3c80795e))
+
 ## [0.2.0](https://github.com/majksa-dev/rust-gateway/compare/v0.1.3...v0.2.0) (2024-06-13)
 
 
