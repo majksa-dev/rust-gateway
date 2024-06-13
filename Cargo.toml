@@ -5,11 +5,12 @@ edition = "2021"
 
 [features]
 debug = ["essentials/dotenv"]
-default = ["cors"]
+default = ["cors", "rate-limit"]
 cors = []
+rate-limit = []
 
 [dependencies]
-essentials = { tag = "v0.3.1", git = "https://github.com/majksa-dev/rust-essentials", default-features = false, features = ["log"] }
+essentials = { tag = "v0.3.3", git = "https://github.com/majksa-dev/rust-essentials", features = ["all"]}
 async-trait = "0.1.77"
 structopt = "0.3.26"
 tokio = { version = "1", features = ["full"] }
