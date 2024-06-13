@@ -14,5 +14,3 @@ jobs:
     uses: majksa-actions/workflows/.github/workflows/release-please.yml@v1
     secrets:
       RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-    with:
-      release-type: "rust"
