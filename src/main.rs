@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use gateway::{
     cors,
     http::{Request, Response},
-    Context, Middleware, Next, Result, TcpOrigin,
+    rate_limit, time, Context, Middleware, Next, Result, TcpOrigin,
 };
 use http::header;
 use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
@@ -43,6 +43,36 @@ async fn main() {
         cors::Middleware::new(cors::Config {
             config: HashMap::new(),
         }),
+    )
+    .register_middleware(
+        3,
+        rate_limit::Middleware::new(
+            rate_limit::Config {
+                config: HashMap::from([(
+                    "app".to_string(),
+                    rate_limit::AppConfig::new(
+                        Some(rate_limit::Quota {
+                            total: Some(time::Frequency {
+                                amount: 5,
+                                interval: time::Time {
+                                    amount: 1,
+                                    unit: time::TimeUnit::Minutes,
+                                },
+                            }),
+                            user: Some(time::Frequency {
+                                amount: 2,
+                                interval: time::Time {
+                                    amount: 1,
+                                    unit: time::TimeUnit::Minutes,
+                                },
+                            }),
+                        }),
+                        HashMap::new(),
+                    ),
+                )]),
+            },
+            rate_limit::InMemoryDatastore::new(),
+        ),
     )
     .with_app_port(7878)
     .build()

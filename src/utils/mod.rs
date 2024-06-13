@@ -1,3 +1,5 @@
+pub mod time;
+
 use std::future::Future;
 
 pub trait AsyncAndThen<T, F> {

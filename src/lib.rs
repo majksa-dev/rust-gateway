@@ -60,6 +60,8 @@ pub mod cors;
 pub(crate) mod gateway;
 pub mod http;
 pub mod io;
+#[cfg(feature = "rate-limit")]
+pub mod rate_limit;
 pub(crate) mod server;
 pub mod thread;
 pub(crate) mod utils;
@@ -79,3 +81,4 @@ pub use server::{
     app::{builder, Server, ServerBuilder},
     health_check::HealthCheck,
 };
+pub use utils::time;
