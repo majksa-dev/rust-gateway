@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/majksa-dev/rust-gateway/compare/v0.2.1...v0.2.2) (2024-06-13)
+
+
+### Bug Fixes
+
+* accept moved values ([c0d407a](https://github.com/majksa-dev/rust-gateway/commit/c0d407a3b207d901b5d4f0f8d9d83da6c9184d84))
+
 ## [0.2.1](https://github.com/majksa-dev/rust-gateway/compare/v0.2.0...v0.2.1) (2024-06-13)
 
 
