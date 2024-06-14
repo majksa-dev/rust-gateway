@@ -40,7 +40,11 @@ async fn before_each() -> Context {
     let mock_server = MockServer::builder().listener(listener).start().await;
     Mock::given(method("GET"))
         .and(path("/hello"))
-        .respond_with(ResponseTemplate::new(200).insert_header("Cache-Control", "no-cache"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .insert_header("Cache-Control", "no-cache")
+                .insert_header("Connection", "close"),
+        )
         .mount(&mock_server)
         .await;
     let redis = GenericImage::new("redis", "7.2.4")

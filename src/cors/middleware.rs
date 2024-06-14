@@ -8,6 +8,7 @@ use crate::{
         Result,
     },
     http::{HeaderMapExt, Request, Response},
+    Error,
 };
 use async_trait::async_trait;
 use http::{header, StatusCode};
@@ -40,7 +41,9 @@ impl TMiddleware for Middleware {
             let mut response = Response::new(StatusCode::NO_CONTENT);
             response
                 .insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-                .unwrap();
+                .ok_or_else(|| {
+                    Error::new("ACCESS_CONTROL_ALLOW_ORIGIN contains an invalid character")
+                })?;
             return Ok(response);
         }
         let method = request.method.clone();
@@ -79,13 +82,19 @@ impl TMiddleware for Middleware {
                     .collect::<Vec<&str>>()
                     .join(", "),
             )
-            .unwrap();
+            .ok_or_else(|| {
+                Error::new("ACCESS_CONTROL_ALLOW_HEADERS contains an invalid character")
+            })?;
         response
             .insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-            .unwrap();
+            .ok_or_else(|| {
+                Error::new("ACCESS_CONTROL_ALLOW_ORIGIN contains an invalid character")
+            })?;
         response
             .insert_header(header::ACCESS_CONTROL_ALLOW_METHODS, method.to_string())
-            .unwrap();
+            .ok_or_else(|| {
+                Error::new("ACCESS_CONTROL_ALLOW_METHODS contains an invalid character")
+            })?;
         Ok(response)
     }
 }

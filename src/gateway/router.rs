@@ -19,9 +19,8 @@ impl RegexRouter {
         Self::default()
     }
 
-    pub fn add_route(&mut self, method: Method, path: &str, app_id: String) {
-        self.routes
-            .push((method, Regex::new(path).unwrap(), app_id));
+    pub fn add_route(&mut self, method: Method, regex: Regex, app_id: String) {
+        self.routes.push((method, regex, app_id));
     }
 }
 
