@@ -32,11 +32,16 @@ impl OriginServer for TcpOrigin {
         left_rx: ReadHalf<TcpStream>,
         left_remains: Vec<u8>,
     ) -> Result<(Response, OriginResponse, Vec<u8>)> {
-        let addr = self
-            .0
-            .get(&context.app_id)
-            .ok_or(Error::status(StatusCode::NOT_FOUND))?
-            .to_string();
+        let addr = match self.0.get(&context.app_id) {
+            Some(addr) => addr.to_string(),
+            None => {
+                return Ok((
+                    Response::new(StatusCode::NOT_FOUND),
+                    Box::new(io::empty()),
+                    Vec::new(),
+                ));
+            }
+        };
         let right = TcpStream::connect(addr).await.map_err(Error::io)?;
         let (mut right_rx, mut right_tx) = io::split(right);
         right_tx.write_request(&request).await.map_err(Error::io)?;

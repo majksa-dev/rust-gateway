@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use http::{HeaderMap, HeaderName, HeaderValue};
+use http::{header::GetAll, HeaderMap, HeaderName, HeaderValue};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::io::error::{error, Headers};
@@ -56,5 +56,42 @@ where
             }
         }
         Ok(headers)
+    }
+}
+
+pub trait HeaderMapExt {
+    fn headers(&self) -> &HeaderMap;
+
+    fn headers_mut(&mut self) -> &mut HeaderMap;
+
+    fn get_content_length(&self) -> Option<usize> {
+        self.headers()
+            .get(http::header::CONTENT_LENGTH)?
+            .to_str()
+            .ok()?
+            .parse::<usize>()
+            .ok()
+    }
+
+    fn insert_header<K: TryInto<HeaderName>, V: TryInto<HeaderValue>>(
+        &mut self,
+        key: K,
+        value: V,
+    ) -> Option<()> {
+        self.headers_mut()
+            .insert(key.try_into().ok()?, value.try_into().ok()?);
+        Some(())
+    }
+
+    fn header<K: TryInto<HeaderName>>(&self, key: K) -> Option<&HeaderValue> {
+        self.headers().get(key.try_into().ok()?)
+    }
+
+    fn header_all<K: TryInto<HeaderName>>(&self, key: K) -> Option<GetAll<HeaderValue>> {
+        Some(self.headers().get_all(key.try_into().ok()?))
+    }
+
+    fn header_mut<K: TryInto<HeaderName>>(&mut self, key: K) -> Option<&mut HeaderValue> {
+        self.headers_mut().get_mut(key.try_into().ok()?)
     }
 }

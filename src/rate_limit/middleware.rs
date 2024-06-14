@@ -7,11 +7,11 @@ use crate::{
         next::Next,
         Result,
     },
-    http::{Request, Response},
-    Error,
+    http::{HeaderMapExt, Request, Response},
 };
 use async_trait::async_trait;
-use http::StatusCode;
+use essentials::warn;
+use http::{header, StatusCode};
 
 pub struct Middleware {
     config: config::Config,
@@ -28,22 +28,47 @@ impl Middleware {
             datastore: Box::new(datastore),
         }
     }
+
+    fn too_many_requests(reset: usize) -> Response {
+        let mut response = Response::new(StatusCode::TOO_MANY_REQUESTS);
+        response
+            .insert_header(
+                header::RETRY_AFTER,
+                reset.saturating_sub(chrono::Utc::now().timestamp() as usize),
+            )
+            .unwrap();
+        response
+    }
 }
 
 #[async_trait]
 impl TMiddleware for Middleware {
     async fn run(&self, ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {
-        let ip = request
-            .headers
-            .get("X-Real-IP")
+        let ip = match request
+            .header("X-Real-IP")
             .and_then(|header| header.to_str().ok())
-            .map(|header| header.to_string())
-            .ok_or(Error::status(StatusCode::BAD_REQUEST))?;
-        let config = self
-            .config
-            .config
-            .get(&ctx.app_id)
-            .ok_or(Error::status(StatusCode::UNAUTHORIZED))?;
+        {
+            Some(ip) => ip.to_string(),
+            None => {
+                return Ok(Response::new(StatusCode::BAD_REQUEST));
+            }
+        };
+        let token = match request
+            .header("X-Api-Token")
+            .and_then(|header| header.to_str().ok())
+        {
+            Some(token) => token.to_string(),
+            None => {
+                return Ok(Response::new(StatusCode::UNAUTHORIZED));
+            }
+        };
+        let config = match self.config.config.get(&ctx.app_id) {
+            Some(config) => config,
+            None => {
+                warn!("No config found for app: {}", ctx.app_id);
+                return Ok(Response::new(StatusCode::BAD_GATEWAY));
+            }
+        };
         let quota = match config
             .endpoints
             .get(&ctx.endpoint_id)
@@ -51,31 +76,46 @@ impl TMiddleware for Middleware {
         {
             Some(quota) => quota,
             None => {
+                warn!("No quota found for endpoint: {}", ctx.endpoint_id);
                 return next.run(request).await;
             }
         };
-        let total_key = format!("{}--{}", ctx.app_id, ctx.endpoint_id);
-        let user_key = format!("{}--{}", total_key, ip);
-        let rate_limit = if let Some(frequency) = quota.user.as_ref() {
-            self.datastore.get_rate_limit(&user_key, frequency).await
-        } else if let Some(frequency) = quota.total.as_ref() {
-            self.datastore.get_rate_limit(&total_key, frequency).await
-        } else {
-            return next.run(request).await;
+        let total_key = format!("{}--{}--{}", ctx.app_id, ctx.endpoint_id, token);
+        let user_key = format!("{}--{}--{}", ctx.app_id, ctx.endpoint_id, ip);
+        let rate_limit = match quota.user.as_ref() {
+            Some(frequency) => match self.datastore.get_rate_limit(&user_key, frequency).await {
+                Ok(rate_limit) => Some(rate_limit),
+                Err(reset) => {
+                    return Ok(Self::too_many_requests(reset));
+                }
+            },
+            None => None,
         };
-        if rate_limit.remaining == 0 {
-            return Err(Error::status(StatusCode::TOO_MANY_REQUESTS));
-        }
+        if let Err(reset) = self
+            .datastore
+            .get_rate_limit(&total_key, &quota.total)
+            .await
+        {
+            return Ok(Self::too_many_requests(reset));
+        };
         let mut response = next.run(request).await?;
-        response
-            .insert_header("X-RateLimit-Limit", rate_limit.limit)
-            .unwrap();
-        response
-            .insert_header("X-RateLimit-Remaining", rate_limit.remaining)
-            .unwrap();
-        response
-            .insert_header("X-RateLimit-Reset", rate_limit.reset)
-            .unwrap();
+        response.insert_header("Connection", "close").unwrap();
+        if let Some(rate_limit) = rate_limit {
+            response
+                .insert_header("RateLimit-Limit", rate_limit.limit)
+                .unwrap();
+            response
+                .insert_header("RateLimit-Remaining", rate_limit.remaining)
+                .unwrap();
+            response
+                .insert_header(
+                    "RateLimit-Reset",
+                    rate_limit
+                        .reset
+                        .saturating_sub(chrono::Utc::now().timestamp() as usize),
+                )
+                .unwrap();
+        }
         Ok(response)
     }
 }

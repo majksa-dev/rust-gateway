@@ -1,8 +1,8 @@
 use crate::io::error::{error, RequestStatusLine};
 
-use super::{ReadHeaders, WriteHeaders};
+use super::{headers::HeaderMapExt, ReadHeaders, WriteHeaders};
 use async_trait::async_trait;
-use http::{header, HeaderMap, Method};
+use http::{HeaderMap, Method};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug)]
@@ -10,17 +10,27 @@ pub struct Request {
     pub method: Method,
     pub path: String,
     pub version: String,
-    pub headers: HeaderMap,
+    headers: HeaderMap,
 }
 
 impl Request {
-    pub fn get_content_length(&self) -> Option<usize> {
-        self.headers
-            .get(header::CONTENT_LENGTH)?
-            .to_str()
-            .ok()?
-            .parse::<usize>()
-            .ok()
+    pub fn new(&self, path: String, method: Method) -> Self {
+        Self {
+            path,
+            method,
+            version: "HTTP/1.1".to_string(),
+            headers: HeaderMap::new(),
+        }
+    }
+}
+
+impl HeaderMapExt for Request {
+    fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+
+    fn headers_mut(&mut self) -> &mut HeaderMap {
+        &mut self.headers
     }
 }
 

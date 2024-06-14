@@ -1,12 +1,16 @@
 use gateway::cors;
+use gateway::http::HeaderMapExt;
+use gateway::ParamRouter;
 use gateway::TcpOrigin;
 use http::header;
+use http::Method;
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use testing_utils::macros as utils;
 use testing_utils::surf;
+use testing_utils::surf::StatusCode;
 use tokio::task::JoinHandle;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -40,35 +44,25 @@ async fn before_each() -> Context {
         )])),
         |request| {
             request
-                .headers
-                .get(header::HOST)
+                .header(header::HOST)
                 .and_then(|value| value.to_str().ok())
                 .map(|x| x.to_string())
         },
     )
     .with_app_port(ports[0])
     .with_health_check_port(ports[1])
-    .register_peer("app".to_string(), |request| match request.path.as_str() {
-        "/hello" => Some("hello".to_string()),
-        _ => None,
-    })
+    .register_peer(
+        "app".to_string(),
+        ParamRouter::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
+    )
     .register_middleware(
         1,
         cors::Middleware::new(cors::Config::new(HashMap::from([(
             "app".to_string(),
-            cors::AppConfig::new(
-                cors::ConfigRules::new(
-                    vec![],
-                    vec![cors::Auth::new(
-                        "token".to_string(),
-                        vec!["http://localhost:3000".to_string()],
-                    )],
-                ),
-                HashMap::from([(
-                    "hello".to_string(),
-                    cors::ConfigRules::new(vec![http::Method::GET], vec![]),
-                )]),
-            ),
+            cors::AppConfig::new(vec![cors::Auth::new(
+                "token".to_string(),
+                vec!["http://localhost:3000".to_string()],
+            )]),
         )]))),
     )
     .build();
@@ -105,7 +99,7 @@ async fn should_succeed(ctx: Context) {
         .await
         .unwrap()
         .status();
-    assert_eq!(status as u16, 200);
+    assert_eq!(status, StatusCode::Ok);
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
@@ -114,80 +108,63 @@ async fn should_fail_when_calling_without_host(ctx: Context) {
         .await
         .unwrap()
         .status();
-    assert_eq!(status as u16, 502, "expected status 502, got {}", status);
+    assert_eq!(status, StatusCode::BadGateway);
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
 async fn should_fail_when_calling_valid_endpoint_without_token(ctx: Context) {
     let status = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("X-Real-IP", "1.2.3.4")
         .header("Origin", "http://localhost:3000")
         .header("Host", "app")
         .await
         .unwrap()
         .status();
-    assert_eq!(status as u16, 400);
+    assert_eq!(status, StatusCode::Unauthorized);
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
 async fn should_fail_when_calling_valid_endpoint_with_invalid_token(ctx: Context) {
     let status = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("X-Real-IP", "1.2.3.4")
         .header("Origin", "http://localhost:3000")
         .header("X-Api-Token", "invalid")
         .header("Host", "app")
         .await
         .unwrap()
         .status();
-    assert_eq!(status as u16, 401);
-}
-
-#[utils::test(setup = before_each, teardown = after_each)]
-async fn should_fail_when_calling_valid_endpoint_without_ip(ctx: Context) {
-    let status = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("X-Api-Token", "token")
-        .header("Origin", "http://localhost:3000")
-        .header("Host", "app")
-        .await
-        .unwrap()
-        .status();
-    assert_eq!(status as u16, 200);
+    assert_eq!(status, StatusCode::Unauthorized);
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
 async fn should_fail_when_calling_valid_endpoint_without_origin(ctx: Context) {
     let status = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("X-Real-IP", "1.2.3.4")
         .header("X-Api-Token", "token")
         .header("Host", "app")
         .await
         .unwrap()
         .status();
-    assert_eq!(status as u16, 400);
+    assert_eq!(status, StatusCode::BadRequest);
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
 async fn should_fail_when_calling_valid_endpoint_with_invalid_origin(ctx: Context) {
     let status = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("X-Real-IP", "1.2.3.4")
         .header("X-Api-Token", "token")
         .header("Origin", "http://localhost:4000")
         .header("Host", "app")
         .await
         .unwrap()
         .status();
-    assert_eq!(status as u16, 403);
+    assert_eq!(status, StatusCode::Forbidden);
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
 async fn should_fail_when_calling_invalid_endpoint(ctx: Context) {
     let status = surf::get(format!("http://127.0.0.1:{}/unknown", &ctx.app))
-        .header("X-Real-IP", "1.2.3.4")
         .header("X-Api-Token", "token")
         .header("Origin", "http://localhost:3000")
         .header("Host", "app")
         .await
         .unwrap()
         .status();
-    assert_eq!(status as u16, 404);
+    assert_eq!(status, StatusCode::Forbidden);
 }

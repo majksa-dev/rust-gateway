@@ -7,8 +7,7 @@ use crate::{
         next::Next,
         Result,
     },
-    http::{Request, Response},
-    Error,
+    http::{HeaderMapExt, Request, Response},
 };
 use async_trait::async_trait;
 use http::{header, StatusCode};
@@ -27,41 +26,46 @@ impl Middleware {
 #[async_trait]
 impl TMiddleware for Middleware {
     async fn run(&self, ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {
-        let method = request.method.clone();
-        let config = self
-            .config
-            .config
-            .get(&ctx.app_id)
-            .ok_or(Error::status(StatusCode::UNAUTHORIZED))?;
-        let origin = request
-            .headers
-            .get(header::ORIGIN)
+        let origin = match request
+            .header(header::ORIGIN)
             .and_then(|header| header.to_str().ok())
             .map(|header| header.to_string())
-            .ok_or(Error::status(StatusCode::BAD_REQUEST))?;
-        let token = request
-            .headers
-            .get("X-Api-Token")
-            .and_then(|header| header.to_str().ok())
-            .map(|header| header.to_string())
-            .ok_or(Error::status(StatusCode::BAD_REQUEST))?;
-        let endpoint = config
-            .endpoints
-            .get(&ctx.endpoint_id)
-            .ok_or(Error::status(StatusCode::UNAUTHORIZED))?;
-        if !config.rules.is_method_allowed(&method) && !endpoint.is_method_allowed(&method) {
-            return Err(Error::status(StatusCode::METHOD_NOT_ALLOWED));
-        }
-        if let Some(auth) = config
-            .rules
-            .find_auth(&token)
-            .or(endpoint.find_auth(&token))
         {
+            Some(origin) => origin,
+            None => {
+                return Ok(Response::new(StatusCode::BAD_REQUEST));
+            }
+        };
+        if request.method == http::Method::OPTIONS {
+            let mut response = Response::new(StatusCode::NO_CONTENT);
+            response
+                .insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
+                .unwrap();
+            return Ok(response);
+        }
+        let method = request.method.clone();
+        let config = match self.config.config.get(&ctx.app_id) {
+            Some(config) => config,
+            None => {
+                return Ok(Response::new(StatusCode::UNAUTHORIZED));
+            }
+        };
+        let token = match request
+            .header("X-Api-Token")
+            .and_then(|header| header.to_str().ok())
+            .map(|header| header.to_string())
+        {
+            Some(token) => token,
+            None => {
+                return Ok(Response::new(StatusCode::UNAUTHORIZED));
+            }
+        };
+        if let Some(auth) = config.find_auth(&token) {
             if !auth.is_origin_allowed(&origin) {
-                return Err(Error::status(StatusCode::FORBIDDEN));
+                return Ok(Response::new(StatusCode::FORBIDDEN));
             }
         } else {
-            return Err(Error::status(StatusCode::UNAUTHORIZED));
+            return Ok(Response::new(StatusCode::UNAUTHORIZED));
         }
 
         let mut response = next.run(request).await?;
@@ -69,7 +73,7 @@ impl TMiddleware for Middleware {
             .insert_header(
                 header::ACCESS_CONTROL_ALLOW_HEADERS,
                 response
-                    .headers
+                    .headers()
                     .keys()
                     .map(|key| key.as_str())
                     .collect::<Vec<&str>>()

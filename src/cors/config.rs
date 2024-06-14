@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use http::Method;
-
 #[derive(Debug)]
 pub struct Config {
     pub config: HashMap<String, AppConfig>,
@@ -18,35 +16,16 @@ unsafe impl Sync for Config {}
 
 #[derive(Debug)]
 pub struct AppConfig {
-    pub rules: ConfigRules,
-    pub endpoints: HashMap<String, ConfigRules>,
+    pub rules: Vec<Auth>,
 }
 
 impl AppConfig {
-    pub fn new(rules: ConfigRules, endpoints: HashMap<String, ConfigRules>) -> Self {
-        Self { rules, endpoints }
-    }
-}
-
-#[derive(Debug)]
-pub struct ConfigRules {
-    pub methods: Vec<Method>,
-    pub auth: Vec<Auth>,
-}
-
-impl ConfigRules {
-    pub fn new(methods: Vec<Method>, auth: Vec<Auth>) -> Self {
-        Self { methods, auth }
-    }
-}
-
-impl ConfigRules {
-    pub fn is_method_allowed(&self, method: &Method) -> bool {
-        method == Method::OPTIONS || self.methods.contains(method)
+    pub fn new(rules: Vec<Auth>) -> Self {
+        Self { rules }
     }
 
     pub fn find_auth(&self, token: impl AsRef<str>) -> Option<&Auth> {
-        self.auth.iter().find(|auth| auth.token == token.as_ref())
+        self.rules.iter().find(|auth| auth.token == token.as_ref())
     }
 }
 

@@ -1,16 +1,16 @@
 use crate::io::error::{error, ResponseStatusLine};
 
-use super::{ReadHeaders, WriteHeaders};
+use super::{headers::HeaderMapExt, ReadHeaders, WriteHeaders};
 use async_trait::async_trait;
-use http::{header, HeaderMap, HeaderName, HeaderValue, StatusCode};
+use http::{header, HeaderMap, HeaderValue, StatusCode};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug)]
 pub struct Response {
     pub version: String,
     pub status: StatusCode,
-    pub headers: HeaderMap,
     pub forward_body: bool,
+    headers: HeaderMap,
 }
 
 impl Response {
@@ -28,24 +28,15 @@ impl Response {
     pub fn error() -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR)
     }
+}
 
-    pub fn get_content_length(&self) -> Option<usize> {
-        self.headers
-            .get(http::header::CONTENT_LENGTH)?
-            .to_str()
-            .ok()?
-            .parse::<usize>()
-            .ok()
+impl HeaderMapExt for Response {
+    fn headers(&self) -> &HeaderMap {
+        &self.headers
     }
 
-    pub fn insert_header<K: TryInto<HeaderName>, V: TryInto<HeaderValue>>(
-        &mut self,
-        key: K,
-        value: V,
-    ) -> Option<()> {
-        self.headers
-            .insert(key.try_into().ok()?, value.try_into().ok()?);
-        Some(())
+    fn headers_mut(&mut self) -> &mut HeaderMap {
+        &mut self.headers
     }
 }
 

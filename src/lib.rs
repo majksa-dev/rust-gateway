@@ -6,14 +6,14 @@
 //! use async_trait::async_trait;
 //! use gateway::{
 //!     cors,
-//!     http::{Request, Response},
-//!     Context, Middleware, Next, Result, TcpOrigin,
+//!     http::{HeaderMapExt, Request, Response},
+//!     rate_limit, time, Context, Middleware, Next, ParamRouter, Result, TcpOrigin,
 //! };
-//! use http::header;
+//! use http::{header, Method};
 //! use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
-
+//!
 //! struct Gateway;
-
+//!
 //! #[async_trait]
 //! impl Middleware for Gateway {
 //!     async fn run(&self, _ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {
@@ -23,7 +23,7 @@
 //!         Ok(response)
 //!     }
 //! }
-
+//!
 //! #[tokio::main]
 //! async fn main() {
 //!     env::set_var("RUST_LOG", "info");
@@ -31,25 +31,57 @@
 //!     gateway::builder(
 //!         TcpOrigin::new(HashMap::from([(
 //!             "app".to_string(),
-//!             Box::new("127.0.0.1:8081".parse::<SocketAddr>().unwrap()),
+//!             Box::new("127.0.0.1:7979".parse::<SocketAddr>().unwrap()),
 //!         )])),
 //!         |request| {
 //!             request
-//!                 .headers
-//!                 .get("X-App")
+//!                 .header(header::HOST)
 //!                 .and_then(|value| value.to_str().ok())
 //!                 .map(|x| x.to_string())
 //!         },
 //!     )
-//!     .register_peer("app".to_string(), |request| Some(request.path.clone()))
+//!     .register_peer(
+//!         "app".to_string(),
+//!         ParamRouter::new().add_route(Method::GET, "/:hello".to_string(), "hello".to_string()),
+//!     )
 //!     .register_middleware(1, Gateway)
 //!     .register_middleware(
 //!         2,
-//!         cors::Middleware(cors::Config {
+//!         cors::Middleware::new(cors::Config {
 //!             config: HashMap::new(),
 //!         }),
 //!     )
-//!     .with_app_port(8080)
+//!     .register_middleware(
+//!         3,
+//!         rate_limit::Middleware::new(
+//!             rate_limit::Config {
+//!                 config: HashMap::from([(
+//!                     "app".to_string(),
+//!                     rate_limit::AppConfig::new(
+//!                         Some(rate_limit::Quota {
+//!                             total: time::Frequency {
+//!                                 amount: 5,
+//!                                 interval: time::Time {
+//!                                     amount: 1,
+//!                                     unit: time::TimeUnit::Minutes,
+//!                                 },
+//!                             },
+//!                             user: Some(time::Frequency {
+//!                                 amount: 2,
+//!                                 interval: time::Time {
+//!                                     amount: 1,
+//!                                     unit: time::TimeUnit::Minutes,
+//!                                 },
+//!                             }),
+//!                         }),
+//!                         HashMap::new(),
+//!                     ),
+//!                 )]),
+//!             },
+//!             rate_limit::InMemoryDatastore::new(),
+//!         ),
+//!     )
+//!     .with_app_port(7878)
 //!     .build()
 //!     .run()
 //!     .await;
@@ -63,13 +95,13 @@ pub mod io;
 #[cfg(feature = "rate-limit")]
 pub mod rate_limit;
 pub(crate) mod server;
-pub mod thread;
 pub(crate) mod utils;
 
 pub use gateway::{
     entrypoint::EntryPoint,
     middleware::{Context, Middleware, Service},
     origin::{Origin, OriginResponse, OriginServer, TcpOrigin},
+    router::{ParamRouter, RegexRouter, Router, RouterService},
     Error, Next, Result,
 };
 pub use http::{

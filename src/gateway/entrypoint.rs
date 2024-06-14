@@ -2,6 +2,7 @@ use super::{
     middleware::Context,
     next::Next,
     origin::{Origin, OriginResponse},
+    router::RouterService,
 };
 use crate::{
     gateway::Error,
@@ -12,6 +13,7 @@ use crate::{
     Service,
 };
 use async_trait::async_trait;
+use essentials::info;
 use http::StatusCode;
 use std::result::Result as StdResult;
 use std::{
@@ -30,6 +32,7 @@ pub struct EntryPointHandler(pub Arc<EntryPoint>);
 #[async_trait]
 impl Handler for EntryPointHandler {
     async fn handle(&self, left: TcpStream) {
+        info!("Received a new connection");
         let (left_rx, mut left_tx) = io::split(left);
         match EntryPoint::handle(&self.0, left_rx).await {
             Ok((response, right_rx, right_remains)) => {
@@ -49,17 +52,12 @@ impl Handler for EntryPointHandler {
                     essentials::warn!("{}", err);
                 }
             }
-            Err(Error::Message(err)) => {
+            Err(err) => {
                 essentials::error!("{}", err);
                 if let Err(err) = left_tx
                     .write_all("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n".as_bytes())
                     .await
                 {
-                    essentials::warn!("{}", err);
-                }
-            }
-            Err(Error::HttpStatus(status)) => {
-                if let Err(err) = left_tx.write_response(&Response::new(status)).await {
                     essentials::warn!("{}", err);
                 }
             }
@@ -70,7 +68,7 @@ impl Handler for EntryPointHandler {
 pub struct EntryPoint {
     origin: Origin,
     generate_peer_key: Box<GenerateKey>,
-    peers: HashMap<String, Box<GenerateKey>>,
+    peers: HashMap<String, RouterService>,
     middlewares: Middlewares,
 }
 
@@ -83,7 +81,7 @@ impl EntryPoint {
     pub fn new(
         origin: Origin,
         generate_peer_key: Box<GenerateKey>,
-        peers: HashMap<String, Box<GenerateKey>>,
+        peers: HashMap<String, RouterService>,
         middlewares: VecDeque<Service>,
     ) -> Self {
         Self {
@@ -117,9 +115,11 @@ impl EntryPoint {
                 let right = right
                     .lock()
                     .map_err(|_| Error::new("Mutex poisoned when returning right stream"))?
-                    .take()
-                    .ok_or(Error::new("Mutex poisoned when returning right stream"))?;
-                Ok((response, Box::new(right.0), right.1))
+                    .take();
+                Ok(match right {
+                    Some(right) => (response, Box::new(right.0), right.1),
+                    None => (response, Box::new(io::empty()), Vec::new()),
+                })
             }
             None => {
                 entrypoint
@@ -138,16 +138,32 @@ impl EntryPoint {
         let request = request_reader.read_request().await.map_err(Error::io)?;
         let app_id = match (entrypoint.generate_peer_key)(&request) {
             Some(app) => app,
-            None => Err(Error::status(StatusCode::BAD_GATEWAY))?,
+            None => {
+                return Ok((
+                    Response::new(StatusCode::BAD_GATEWAY),
+                    Box::new(io::empty()),
+                    Vec::new(),
+                ));
+            }
         };
-        let endpoint_id = match (entrypoint
-            .peers
-            .get(&app_id)
-            .ok_or(Error::status(StatusCode::BAD_GATEWAY))?)(
-            &request
-        ) {
-            Some(endpoint_id) => endpoint_id,
-            None => Err(Error::status(StatusCode::NOT_FOUND))?,
+        let endpoint_id = match entrypoint.peers.get(&app_id) {
+            Some(endpoint_id) => match endpoint_id.matches(&request) {
+                Some(endpoint_id) => endpoint_id.clone(),
+                None => {
+                    return Ok((
+                        Response::new(StatusCode::FORBIDDEN),
+                        Box::new(io::empty()),
+                        Vec::new(),
+                    ));
+                }
+            },
+            None => {
+                return Ok((
+                    Response::new(StatusCode::BAD_GATEWAY),
+                    Box::new(io::empty()),
+                    Vec::new(),
+                ));
+            }
         };
         let context = Context {
             app_id,

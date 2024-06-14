@@ -1,10 +1,10 @@
 use async_trait::async_trait;
 use gateway::{
     cors,
-    http::{Request, Response},
-    rate_limit, time, Context, Middleware, Next, Result, TcpOrigin,
+    http::{HeaderMapExt, Request, Response},
+    rate_limit, time, Context, Middleware, Next, ParamRouter, Result, TcpOrigin,
 };
-use http::header;
+use http::{header, Method};
 use std::{collections::HashMap, env, net::SocketAddr, sync::Arc};
 
 struct Gateway;
@@ -30,13 +30,15 @@ async fn main() {
         )])),
         |request| {
             request
-                .headers
-                .get(header::HOST)
+                .header(header::HOST)
                 .and_then(|value| value.to_str().ok())
                 .map(|x| x.to_string())
         },
     )
-    .register_peer("app".to_string(), |request| Some(request.path.clone()))
+    .register_peer(
+        "app".to_string(),
+        ParamRouter::new().add_route(Method::GET, "/:hello".to_string(), "hello".to_string()),
+    )
     .register_middleware(1, Gateway)
     .register_middleware(
         2,
@@ -52,13 +54,13 @@ async fn main() {
                     "app".to_string(),
                     rate_limit::AppConfig::new(
                         Some(rate_limit::Quota {
-                            total: Some(time::Frequency {
+                            total: time::Frequency {
                                 amount: 5,
                                 interval: time::Time {
                                     amount: 1,
                                     unit: time::TimeUnit::Minutes,
                                 },
-                            }),
+                            },
                             user: Some(time::Frequency {
                                 amount: 2,
                                 interval: time::Time {

@@ -2,6 +2,7 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::gateway::entrypoint::{EntryPoint, EntryPointHandler};
 use crate::gateway::origin::{Origin, OriginServer};
+use crate::gateway::router::{Router, RouterService};
 use crate::http::server::Server as HttpServer;
 use crate::http::Request;
 use crate::{Middleware, Service};
@@ -17,7 +18,7 @@ pub(crate) type GenerateKey = dyn (Fn(&Request) -> Option<String>) + Send + Sync
 pub struct ServerBuilder {
     origin: Origin,
     generate_peer_key: Box<GenerateKey>,
-    peers: HashMap<String, Box<GenerateKey>>,
+    peers: HashMap<String, RouterService>,
     middlewares: HashMap<usize, Service>,
     host: IpAddr,
     app_port: u16,
@@ -38,11 +39,8 @@ impl ServerBuilder {
     }
 
     /// Register a peer with the given key.
-    pub fn register_peer<F>(mut self, key: String, endpoint_key_generator: F) -> Self
-    where
-        F: Fn(&Request) -> Option<String> + Send + Sync + 'static,
-    {
-        self.peers.insert(key, Box::new(endpoint_key_generator));
+    pub fn register_peer(mut self, key: String, router: impl Router + 'static) -> Self {
+        self.peers.insert(key, Box::new(router));
         self
     }
 

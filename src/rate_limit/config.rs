@@ -30,6 +30,6 @@ impl AppConfig {
 
 #[derive(Debug)]
 pub struct Quota {
-    pub total: Option<Frequency>,
+    pub total: Frequency,
     pub user: Option<Frequency>,
 }
