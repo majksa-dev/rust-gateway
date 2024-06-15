@@ -21,8 +21,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 use tokio::{
-    io::{self, AsyncWriteExt, BufReader, ReadHalf},
-    net::TcpStream,
+    io::{self, AsyncWriteExt, BufReader},
+    net::{tcp::OwnedReadHalf, TcpStream},
 };
 
 pub type Middlewares = VecDeque<Arc<Service>>;
@@ -33,7 +33,7 @@ pub struct EntryPointHandler(pub Arc<EntryPoint>);
 impl Handler for EntryPointHandler {
     async fn handle(&self, left: TcpStream) {
         info!("Received a new connection");
-        let (left_rx, mut left_tx) = io::split(left);
+        let (left_rx, mut left_tx) = left.into_split();
         match EntryPoint::handle(&self.0, left_rx).await {
             Ok((response, right_rx, right_remains)) => {
                 if let Err(err) = left_tx
@@ -96,7 +96,7 @@ impl EntryPoint {
         entrypoint: Arc<Self>,
         context: Arc<Context>,
         request: Request,
-        left_rx: ReadHalf<TcpStream>,
+        left_rx: OwnedReadHalf,
         left_remains: Vec<u8>,
         mut it: Middlewares,
     ) -> Result<(Response, OriginResponse, Vec<u8>)> {
@@ -132,7 +132,7 @@ impl EntryPoint {
 
     pub async fn handle(
         entrypoint: &Arc<Self>,
-        mut left_rx: ReadHalf<TcpStream>,
+        mut left_rx: OwnedReadHalf,
     ) -> Result<(Response, OriginResponse, Vec<u8>)> {
         let mut request_reader = BufReader::new(&mut left_rx);
         let request = request_reader.read_request().await.map_err(Error::io)?;

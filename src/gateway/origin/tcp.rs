@@ -3,8 +3,8 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use async_trait::async_trait;
 use http::StatusCode;
 use tokio::{
-    io::{self, AsyncWriteExt, BufReader, ReadHalf},
-    net::TcpStream,
+    io::{self, AsyncWriteExt, BufReader},
+    net::{tcp::OwnedReadHalf, TcpStream},
 };
 
 use crate::{
@@ -29,7 +29,7 @@ impl OriginServer for TcpOrigin {
         &self,
         context: Arc<Context>,
         request: Request,
-        left_rx: ReadHalf<TcpStream>,
+        left_rx: OwnedReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<(Response, OriginResponse, Vec<u8>)> {
         let addr = match self.0.get(&context.app_id) {
@@ -43,7 +43,7 @@ impl OriginServer for TcpOrigin {
             }
         };
         let right = TcpStream::connect(addr).await.map_err(Error::io)?;
-        let (mut right_rx, mut right_tx) = io::split(right);
+        let (mut right_rx, mut right_tx) = right.into_split();
         right_tx.write_request(&request).await.map_err(Error::io)?;
         right_tx
             .write_all(left_remains.as_slice())

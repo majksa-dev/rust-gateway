@@ -8,14 +8,14 @@ use crate::{
     Context, Error,
 };
 use std::sync::{Arc, Mutex};
-use tokio::{io::ReadHalf, net::TcpStream};
+use tokio::net::tcp::OwnedReadHalf;
 
 type ResponseWriter = (OriginResponse, Vec<u8>);
 
 pub struct Next {
     pub entrypoint: Arc<EntryPoint>,
     pub context: Arc<Context>,
-    pub left: ReadHalf<TcpStream>,
+    pub left: OwnedReadHalf,
     pub left_remains: Vec<u8>,
     pub right: Arc<Mutex<Option<ResponseWriter>>>,
     pub it: Middlewares,

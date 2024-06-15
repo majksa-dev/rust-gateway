@@ -1,10 +1,7 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::{
-    io::{AsyncRead, ReadHalf},
-    net::TcpStream,
-};
+use tokio::{io::AsyncRead, net::tcp::OwnedReadHalf};
 
 use crate::{
     http::{Request, Response},
@@ -24,7 +21,7 @@ pub trait OriginServer {
         &self,
         context: Arc<Context>,
         request: Request,
-        left_rx: ReadHalf<TcpStream>,
+        left_rx: OwnedReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<(Response, OriginResponse, Vec<u8>)>;
 }
