@@ -3,26 +3,30 @@ use super::{
     next::Next,
     origin::{Origin, OriginResponse},
     router::RouterService,
+    LeftStream,
 };
 use crate::{
     gateway::Error,
-    http::{server::Handler, ReadRequest, Request, Response, WriteResponse},
+    http::{server::Handler, Request, Response, WriteResponse},
     io::WriteReader,
     server::app::GenerateKey,
     utils::AsyncAndThen,
-    Service,
+    ReadRequest, Service,
 };
 use async_trait::async_trait;
-use essentials::info;
 use http::StatusCode;
-use std::result::Result as StdResult;
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, Mutex},
 };
+use std::{
+    io,
+    os::fd::{AsRawFd, FromRawFd},
+    result::Result as StdResult,
+};
 use tokio::{
-    io::{self, AsyncWriteExt, BufReader},
-    net::{tcp::OwnedReadHalf, TcpStream},
+    io::{AsyncWriteExt, BufReader},
+    net::TcpStream,
 };
 
 pub type Middlewares = VecDeque<Arc<Service>>;
@@ -32,9 +36,9 @@ pub struct EntryPointHandler(pub Arc<EntryPoint>);
 #[async_trait]
 impl Handler for EntryPointHandler {
     async fn handle(&self, left: TcpStream) {
-        info!("Received a new connection");
+        let left_std = unsafe { std::net::TcpStream::from_raw_fd(left.as_raw_fd()) };
         let (left_rx, mut left_tx) = left.into_split();
-        match EntryPoint::handle(&self.0, left_rx).await {
+        match EntryPoint::handle(&self.0, (left_std.try_clone().unwrap(), left_rx)).await {
             Ok((response, right_rx, right_remains)) => {
                 if let Err(err) = left_tx
                     .write_response(&response)
@@ -47,7 +51,7 @@ impl Handler for EntryPointHandler {
                         }
                     })
                     .await
-                    .map(|_| left_tx.write_reader(right_rx))
+                    .map(|_| left_std.write_reader(right_rx))
                 {
                     essentials::warn!("{}", err);
                 }
@@ -96,7 +100,7 @@ impl EntryPoint {
         entrypoint: Arc<Self>,
         context: Arc<Context>,
         request: Request,
-        left_rx: OwnedReadHalf,
+        left_rx: LeftStream,
         left_remains: Vec<u8>,
         mut it: Middlewares,
     ) -> Result<(Response, OriginResponse, Vec<u8>)> {
@@ -132,9 +136,9 @@ impl EntryPoint {
 
     pub async fn handle(
         entrypoint: &Arc<Self>,
-        mut left_rx: OwnedReadHalf,
+        mut left_rx: LeftStream,
     ) -> Result<(Response, OriginResponse, Vec<u8>)> {
-        let mut request_reader = BufReader::new(&mut left_rx);
+        let mut request_reader = BufReader::new(&mut left_rx.1);
         let request = request_reader.read_request().await.map_err(Error::io)?;
         let app_id = match (entrypoint.generate_peer_key)(&request) {
             Some(app) => app,

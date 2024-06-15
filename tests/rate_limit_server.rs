@@ -40,11 +40,7 @@ async fn before_each() -> Context {
     let mock_server = MockServer::builder().listener(listener).start().await;
     Mock::given(method("GET"))
         .and(path("/hello"))
-        .respond_with(
-            ResponseTemplate::new(200)
-                .insert_header("Cache-Control", "no-cache")
-                .insert_header("Connection", "close"),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_string("Hello, world!"))
         .mount(&mock_server)
         .await;
     let redis = GenericImage::new("redis", "7.2.4")
@@ -137,8 +133,12 @@ async fn should_succeed(ctx: Context) {
         .header("Host", "app")
         .await;
     debug!("{:?}", response);
-    let status = response.unwrap().status();
+    let mut response = response.unwrap();
+    let status = response.status();
     assert_eq!(status, StatusCode::Ok);
+    assert_eq!(response.header("RateLimit-Limit").unwrap(), "2");
+    assert_eq!(response.header("RateLimit-Remaining").unwrap(), "1");
+    assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
@@ -150,11 +150,12 @@ async fn should_fail_after_2_requests(ctx: Context) {
             .header("Host", "app")
             .await;
         info!("{:?}", response);
-        let response = response.unwrap();
+        let mut response = response.unwrap();
         assert_eq!(response.header("RateLimit-Limit").unwrap(), "2");
         assert_eq!(response.header("RateLimit-Remaining").unwrap(), "1");
         let status = response.status();
         assert_eq!(status, StatusCode::Ok);
+        assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
     }
     {
         let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
@@ -163,11 +164,12 @@ async fn should_fail_after_2_requests(ctx: Context) {
             .header("Host", "app")
             .await;
         info!("{:?}", response);
-        let response = response.unwrap();
+        let mut response = response.unwrap();
         assert_eq!(response.header("RateLimit-Limit").unwrap(), "2");
         assert_eq!(response.header("RateLimit-Remaining").unwrap(), "0");
         let status = response.status();
         assert_eq!(status, StatusCode::Ok);
+        assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
     }
     {
         let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
@@ -194,9 +196,10 @@ async fn should_fail_after_6_requests_from_different_ips(ctx: Context) {
             .header("X-Api-Token", "token")
             .header("Host", "app")
             .await;
-        let response = response.unwrap();
+        let mut response = response.unwrap();
         let status = response.status();
         assert_eq!(status, StatusCode::Ok);
+        assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
     }
     {
         let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))

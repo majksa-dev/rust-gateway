@@ -1,21 +1,20 @@
 use super::{
     entrypoint::{EntryPoint, Middlewares},
     origin::OriginResponse,
-    Result,
+    LeftStream, Result,
 };
 use crate::{
     http::{Request, Response},
     Context, Error,
 };
 use std::sync::{Arc, Mutex};
-use tokio::net::tcp::OwnedReadHalf;
 
 type ResponseWriter = (OriginResponse, Vec<u8>);
 
 pub struct Next {
     pub entrypoint: Arc<EntryPoint>,
     pub context: Arc<Context>,
-    pub left: OwnedReadHalf,
+    pub left: LeftStream,
     pub left_remains: Vec<u8>,
     pub right: Arc<Mutex<Option<ResponseWriter>>>,
     pub it: Middlewares,
