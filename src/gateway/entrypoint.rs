@@ -104,7 +104,7 @@ impl EntryPoint {
         left_remains: Vec<u8>,
         mut it: Middlewares,
     ) -> Result<(Response, OriginResponse, Vec<u8>)> {
-        match it.pop_back() {
+        match it.pop_front() {
             Some(middleware) => {
                 let right = Arc::new(Mutex::new(Option::<(OriginResponse, Vec<u8>)>::None));
                 let next = Next {

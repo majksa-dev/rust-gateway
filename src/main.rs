@@ -39,15 +39,14 @@ async fn main() {
         "app".to_string(),
         ParamRouter::new().add_route(Method::GET, "/:hello".to_string(), "hello".to_string()),
     )
-    .register_middleware(1, Gateway)
     .register_middleware(
-        2,
+        1,
         cors::Middleware::new(cors::Config {
             config: HashMap::new(),
         }),
     )
     .register_middleware(
-        3,
+        2,
         rate_limit::Middleware::new(
             rate_limit::Config {
                 config: HashMap::from([(
@@ -76,6 +75,7 @@ async fn main() {
             rate_limit::InMemoryDatastore::new(),
         ),
     )
+    .register_middleware(usize::MAX, Gateway)
     .with_app_port(7878)
     .build()
     .run()
