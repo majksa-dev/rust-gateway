@@ -1,0 +1,21 @@
+rebaseMergeAllowed: true
+squashMergeAllowed: true
+mergeCommitAllowed: false
+deleteBranchOnMerge: true
+branchProtectionRules:
+  - pattern: main
+    dismissesStaleReviews: true
+    isAdminEnforced: true
+    requiredApprovingReviewCount: 0
+    requiresCodeOwnerReviews: false
+    requiresLinearHistory: true
+    requiresCommitSignatures: true
+    restrictsReviewDismissals: false
+    requiresStatusChecks: true
+    requiresStrictStatusChecks: true
+    requiredStatusCheckContexts:
+      - lint-pr / Validate PR title
+      - rust / Test Rust stable, features
+      - rust / Build grcov
+      - rust / Check code formatting
+      - rust / Check code using Clippy
