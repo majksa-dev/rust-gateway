@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{config, Datastore};
+use super::{config, datastore, Datastore};
 use crate::{
     gateway::{
         middleware::{Context, Middleware as TMiddleware},
@@ -83,22 +83,35 @@ impl TMiddleware for Middleware {
         };
         let total_key = format!("{}--{}--{}", ctx.app_id, ctx.endpoint_id, token);
         let user_key = format!("{}--{}--{}", ctx.app_id, ctx.endpoint_id, ip);
-        let rate_limit = match quota.user.as_ref() {
-            Some(frequency) => match self.datastore.get_rate_limit(&user_key, frequency).await {
-                Ok(rate_limit) => Some(rate_limit),
-                Err(reset) => {
-                    return Self::too_many_requests(reset);
-                }
-            },
-            None => None,
+
+        let rate_limit = {
+            use datastore::Response::*;
+            match quota.user.as_ref() {
+                Some(frequency) => match self
+                    .datastore
+                    .get_rate_limit(&user_key, frequency)
+                    .await
+                    .map_err(Error::new)?
+                {
+                    Ok(rate_limit) => Some(rate_limit),
+                    Limited(reset) => {
+                        return Self::too_many_requests(reset);
+                    }
+                },
+                None => None,
+            }
         };
-        if let Err(reset) = self
-            .datastore
-            .get_rate_limit(&total_key, &quota.total)
-            .await
         {
-            return Self::too_many_requests(reset);
-        };
+            use datastore::Response::*;
+            if let Limited(reset) = self
+                .datastore
+                .get_rate_limit(&total_key, &quota.total)
+                .await
+                .map_err(Error::new)?
+            {
+                return Self::too_many_requests(reset);
+            };
+        }
         let mut response = next.run(request).await?;
         if let Some(rate_limit) = rate_limit {
             response

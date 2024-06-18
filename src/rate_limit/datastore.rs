@@ -1,15 +1,17 @@
+use crate::utils::time::{Frequency, TimeUnit};
+use async_trait::async_trait;
+use bb8_redis::{bb8::Pool, redis, RedisConnectionManager};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
 };
 
-use async_trait::async_trait;
-use bb8_redis::{bb8::Pool, redis, RedisConnectionManager};
-use essentials::error;
+pub type Result = std::result::Result<Response, String>;
 
-use crate::utils::time::{Frequency, TimeUnit};
-
-pub type Result = std::result::Result<RateLimit, usize>;
+pub enum Response {
+    Ok(RateLimit),
+    Limited(usize),
+}
 
 #[async_trait]
 pub trait Datastore {
@@ -34,27 +36,17 @@ unsafe impl Send for InMemoryDatastore {}
 impl Datastore for InMemoryDatastore {
     async fn get_rate_limit(&self, key: &str, quota: &Frequency) -> Result {
         let now = chrono::Utc::now().timestamp() as usize;
-        let mut data = match __self.data.lock() {
-            Ok(data) => data,
-            Err(e) => {
-                error!("Failed to lock data: {}", e);
-                return Ok(RateLimit {
-                    limit: quota.amount,
-                    remaining: quota.amount,
-                    reset: 0,
-                });
-            }
-        };
-        if let Some(rate_limit) = data.get_mut(key) {
+        let mut data = self.data.lock().map_err(|e| e.to_string())?;
+        let rate_limit = if let Some(rate_limit) = data.get_mut(key) {
             if rate_limit.reset < now {
                 rate_limit.remaining = quota.amount - 1;
                 rate_limit.reset = now + quota.interval.convert(TimeUnit::Seconds).amount;
             } else if rate_limit.remaining > 0 {
                 rate_limit.remaining -= 1;
             } else {
-                return Err(rate_limit.reset);
+                return Ok(Response::Limited(rate_limit.reset));
             }
-            Ok(rate_limit.clone())
+            rate_limit.clone()
         } else {
             let rate_limit = RateLimit {
                 limit: quota.amount,
@@ -62,8 +54,9 @@ impl Datastore for InMemoryDatastore {
                 reset: now + quota.interval.convert(TimeUnit::Seconds).amount,
             };
             data.insert(key.to_string(), rate_limit.clone());
-            Ok(rate_limit)
-        }
+            rate_limit
+        };
+        Ok(Response::Ok(rate_limit))
     }
 }
 
@@ -87,18 +80,8 @@ impl RedisDatastore {
 impl Datastore for RedisDatastore {
     async fn get_rate_limit(&self, key: &str, quota: &Frequency) -> Result {
         let now = chrono::Utc::now().timestamp() as usize;
-        let mut conn = match self.pool.get().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                error!("Failed to get connection from pool: {}", e);
-                return Ok(RateLimit {
-                    limit: quota.amount,
-                    remaining: quota.amount - 1,
-                    reset: 0,
-                });
-            }
-        };
-        match redis::pipe()
+        let mut conn = self.pool.get().await.map_err(|e| e.to_string())?;
+        redis::pipe()
             .atomic()
             .cmd("SET")
             .arg(key)
@@ -113,27 +96,17 @@ impl Datastore for RedisDatastore {
             .arg(key)
             .query_async(&mut *conn)
             .await
-            .map(|(count, ttl): (usize, usize)| (count, ttl))
-        {
-            Ok((count, ttl)) => {
+            .map(|(count, ttl): (usize, usize)| {
                 if count > quota.amount {
-                    Err(now + ttl)
+                    Response::Limited(now + ttl)
                 } else {
-                    Ok(RateLimit {
+                    Response::Ok(RateLimit {
                         limit: quota.amount,
                         remaining: quota.amount - count,
                         reset: now + ttl,
                     })
                 }
-            }
-            Err(e) => {
-                error!("Failed to execute pipeline: {}", e);
-                Ok(RateLimit {
-                    limit: quota.amount,
-                    remaining: quota.amount - 1,
-                    reset: 0,
-                })
-            }
-        }
+            })
+            .map_err(|e| e.to_string())
     }
 }
