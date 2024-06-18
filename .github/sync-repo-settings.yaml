@@ -10,7 +10,6 @@ branchProtectionRules:
     requiresCodeOwnerReviews: false
     requiresLinearHistory: true
     requiresCommitSignatures: true
-    restrictPushes: true
     restrictsReviewDismissals: false
     requiresStatusChecks: true
     requiresStrictStatusChecks: true
