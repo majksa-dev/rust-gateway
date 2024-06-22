@@ -83,6 +83,11 @@ pub trait HeaderMapExt {
         Some(())
     }
 
+    fn remove_header(&mut self, key: impl TryInto<HeaderName>) -> Option<()> {
+        self.headers_mut().remove(key.try_into().ok()?);
+        Some(())
+    }
+
     fn header<K: TryInto<HeaderName>>(&self, key: K) -> Option<&HeaderValue> {
         self.headers().get(key.try_into().ok()?)
     }

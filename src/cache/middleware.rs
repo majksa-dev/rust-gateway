@@ -12,6 +12,10 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use essentials::{debug, warn};
 use http::{header, StatusCode};
+use pingora_cache::{
+    key::{hash_key, CacheHashKey, CompactCacheKey},
+    VarianceBuilder,
+};
 
 pub struct Middleware {
     config: config::Config,
@@ -45,15 +49,34 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::BAD_GATEWAY));
             }
         };
-        let quota = match config.endpoints.get(&ctx.endpoint_id) {
+        let endpoint = match config.endpoints.get(&ctx.endpoint_id) {
             Some(quota) => quota,
             None => {
                 warn!("Cache not configured for endpoint: {}", ctx.endpoint_id);
                 return next.run(request).await;
             }
         };
-        let key = format!("{}:{}", ctx.app_id, ctx.endpoint_id);
-        let ttl = quota.expires_in.convert(TimeUnit::Seconds).amount;
+        let ip = request
+            .header("X-Real-IP")
+            .and_then(|header| header.to_str().ok())
+            .unwrap_or("")
+            .to_string()
+            .into_boxed_str();
+        let mut variance = VarianceBuilder::new();
+        for header in endpoint.vary_headers.iter() {
+            let value = request
+                .header(header)
+                .and_then(|value| value.to_str().ok())
+                .unwrap_or_default();
+            variance.add_value(header, value);
+        }
+        let key = CompactCacheKey {
+            primary: hash_key(format!("{}:{}", ctx.app_id, ctx.endpoint_id).as_str()),
+            user_tag: ip,
+            variance: variance.finalize().map(Box::new),
+        };
+        let key = key.combined();
+        let ttl = endpoint.expires_in.convert(TimeUnit::Seconds).amount;
         let etag = {
             use datastore::Response::*;
             match self.datastore.fetch_cache(key.as_str()).await? {
@@ -99,6 +122,7 @@ impl TMiddleware for Middleware {
         for (key, value) in origin_response.headers().iter() {
             response.insert_header(key, value);
         }
+        response.remove_header(header::ETAG);
         debug!("Caching response for key: {}", key);
         let origin_headers = origin_response
             .headers()

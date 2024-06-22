@@ -83,10 +83,13 @@ async fn before_each() -> Context {
                 "app".to_string(),
                 cache::AppConfig::new(HashMap::from([(
                     "hello".to_string(),
-                    cache::Quota::new(time::Time {
-                        amount: 1,
-                        unit: time::TimeUnit::Seconds,
-                    }),
+                    cache::Endpoint::new(
+                        time::Time {
+                            amount: 1,
+                            unit: time::TimeUnit::Seconds,
+                        },
+                        vec!["X-Username".to_string()],
+                    ),
                 )])),
             )])),
             cache::RedisDatastore::new(redis_pool),
@@ -149,6 +152,74 @@ async fn should_return_uncached_response(ctx: Context) {
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
+async fn should_return_forward_varying_requests(ctx: Context) {
+    {
+        let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+            .header("Host", "app")
+            .header("X-Username", "username1")
+            .await;
+        debug!("{:?}", response);
+        let mut response = response.unwrap();
+        let status = response.status();
+        assert_eq!(status, StatusCode::Ok);
+        assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
+        assert_eq!(
+            response.header("X-Custom").unwrap().get(0).unwrap(),
+            "unique"
+        );
+        assert_req_count!(ctx, 1);
+    }
+    {
+        let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+            .header("Host", "app")
+            .header("X-Username", "username1")
+            .await;
+        debug!("{:?}", response);
+        let mut response = response.unwrap();
+        let status = response.status();
+        assert_eq!(status, StatusCode::Ok);
+        assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
+        assert_eq!(
+            response.header("X-Custom").unwrap().get(0).unwrap(),
+            "unique"
+        );
+        assert_req_count!(ctx, 1);
+    }
+    {
+        let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+            .header("Host", "app")
+            .header("X-Username", "username2")
+            .await;
+        debug!("{:?}", response);
+        let mut response = response.unwrap();
+        let status = response.status();
+        assert_eq!(status, StatusCode::Ok);
+        assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
+        assert_eq!(
+            response.header("X-Custom").unwrap().get(0).unwrap(),
+            "unique"
+        );
+        assert_req_count!(ctx, 2);
+    }
+    {
+        let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+            .header("Host", "app")
+            .header("X-Username", "username2")
+            .await;
+        debug!("{:?}", response);
+        let mut response = response.unwrap();
+        let status = response.status();
+        assert_eq!(status, StatusCode::Ok);
+        assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
+        assert_eq!(
+            response.header("X-Custom").unwrap().get(0).unwrap(),
+            "unique"
+        );
+        assert_req_count!(ctx, 2);
+    }
+}
+
+#[utils::test(setup = before_each, teardown = after_each)]
 async fn should_return_cached_response_after_initial(ctx: Context) {
     {
         let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
@@ -194,6 +265,7 @@ async fn should_return_cached_response_after_initial(ctx: Context) {
             response.header("X-Custom").unwrap().get(0).unwrap(),
             "unique"
         );
+        assert_eq!(response.header("ETag").is_none(), true);
         assert_req_count!(ctx, 2);
     }
 }

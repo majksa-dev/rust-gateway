@@ -21,6 +21,7 @@ chrono = "0.4.38"
 bb8-redis = "0.15.0"
 regex = "1.10.5"
 anyhow = "1.0.86"
+pingora-cache = "0.2.0"
 
 [dev-dependencies]
 testing-utils = { tag = "0.1.4", git = "https://github.com/majksa-dev/rust-testing-utils" }
