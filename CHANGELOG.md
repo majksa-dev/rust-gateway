@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.0](https://github.com/majksa-dev/rust-gateway/compare/v0.2.2...v0.3.0) (2024-06-22)
+
+
+### Features
+
+* copy tcp stream using zero copy on linux ([#22](https://github.com/majksa-dev/rust-gateway/issues/22)) ([9ac8d30](https://github.com/majksa-dev/rust-gateway/commit/9ac8d308db90d808a6b8bd7a6e4054957f6f3a63))
+* implement custom rate limiter ([ce2d725](https://github.com/majksa-dev/rust-gateway/commit/ce2d7259244583c3f871f2fe1a02f116812d2ff9))
+* rethink the endpoint router, reimplement cors policy, implement rate limiting ([f4a7683](https://github.com/majksa-dev/rust-gateway/commit/f4a7683760097cf46a928e08e2561e20bdacdd4d))
+
+
+### Bug Fixes
+
+* do not setup panic hook in tests ([be2cc0a](https://github.com/majksa-dev/rust-gateway/commit/be2cc0ae4dbf983ff783c737676d0dd8b21c6886))
+* make code stable by removing unwraps ([cec3429](https://github.com/majksa-dev/rust-gateway/commit/cec3429e82253ec00b26d42f76830b01a495cdca))
+* middlewares direction from lowest number to largest ([2239504](https://github.com/majksa-dev/rust-gateway/commit/223950419bb87362a8766521d81d577e09a3a07a))
+* pass owned halfs of tcp stream instead of Arc ([be50002](https://github.com/majksa-dev/rust-gateway/commit/be50002bfc3f0117a86081cdcf1645d77f3e8f68))
+* **perf:** implement io::copy using std and sendfile ([8c59b84](https://github.com/majksa-dev/rust-gateway/commit/8c59b84fe3d197630d048920d3209fab94225c7d))
+* provider constructor for Cors middleware ([73af671](https://github.com/majksa-dev/rust-gateway/commit/73af67191f7b5c2ce6915a70630f9f3d7322ca80))
+* remove beta support ([d39ab31](https://github.com/majksa-dev/rust-gateway/commit/d39ab31b4f52cb3f28a5133bf7fe82153682736e))
+* return result from rate limit datastore ([80a4c7b](https://github.com/majksa-dev/rust-gateway/commit/80a4c7bb5eb30cd868cbd683394240205bf3dfbb))
+
 ## [0.2.2](https://github.com/majksa-dev/rust-gateway/compare/v0.2.1...v0.2.2) (2024-06-13)
 
 
