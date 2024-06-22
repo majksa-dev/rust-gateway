@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/majksa-dev/rust-gateway/compare/v0.4.0...v0.4.1) (2024-06-22)
+
+
+### Bug Fixes
+
+* allow user to specify rate limits based on token ([1290cc9](https://github.com/majksa-dev/rust-gateway/commit/1290cc9594a31356f02df5da28d9708d2e7e6ca5))
+
 ## [0.4.0](https://github.com/majksa-dev/rust-gateway/compare/v0.3.0...v0.4.0) (2024-06-22)
 
 
