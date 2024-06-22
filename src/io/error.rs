@@ -3,8 +3,6 @@ use std::fmt::Display;
 use http::header::{InvalidHeaderName, InvalidHeaderValue};
 use tokio::io;
 
-use crate::gateway;
-
 pub fn error<E: Into<CustomError>>(data: E) -> io::Error {
     io::Error::new(io::ErrorKind::Other, data.into())
 }
@@ -16,7 +14,6 @@ pub enum CustomError {
     Headers(Headers),
     PeerConnection,
     MutexPoison,
-    App(gateway::Error),
 }
 
 impl Display for CustomError {

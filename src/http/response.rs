@@ -18,7 +18,7 @@ pub struct Response {
 
 #[async_trait]
 pub trait ResponseBody: Debug {
-    async fn read_all(self: Box<Self>) -> io::Result<String>;
+    async fn read_all(self: Box<Self>, len: usize) -> io::Result<String>;
 
     async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()>;
 }

@@ -1,10 +1,10 @@
+use anyhow::{anyhow, Context};
 use async_trait::async_trait;
 use essentials::info;
 use gateway::{
     cors,
     http::{response::ResponseBody, HeaderMapExt, Request, Response},
-    rate_limit, time, Context, Error, Middleware, Next, OriginServer, ParamRouter, Result,
-    TcpOrigin,
+    rate_limit, time, Middleware, Next, OriginServer, ParamRouter, Result, TcpOrigin,
 };
 use http::{header, Method, StatusCode};
 use std::{collections::HashMap, env, net::SocketAddr, path::Path};
@@ -18,7 +18,12 @@ struct Gateway;
 
 #[async_trait]
 impl Middleware for Gateway {
-    async fn run<'n>(&self, _ctx: &Context, request: Request, next: Next<'n>) -> Result<Response> {
+    async fn run<'n>(
+        &self,
+        _ctx: &gateway::Context,
+        request: Request,
+        next: Next<'n>,
+    ) -> Result<Response> {
         println!("[gateway] before");
         let mut response = next.run(request).await?;
         println!("[gateway] after");
@@ -46,7 +51,7 @@ pub struct FileResponse {
 impl OriginServer for FileServer {
     async fn connect(
         &self,
-        _context: &Context,
+        _context: &gateway::Context,
         request: Request,
         _left_rx: OwnedReadHalf,
         _left_remains: Vec<u8>,
@@ -56,12 +61,18 @@ impl OriginServer for FileServer {
         if !path.exists() {
             return Ok(Response::new(StatusCode::NOT_FOUND));
         }
-        let file = File::open(path).await.map_err(Error::io)?;
-        let length = file.metadata().await.map_err(Error::io)?.len();
+        let file = File::open(path)
+            .await
+            .with_context(|| format!("Failed to open file: {:?}", request.path))?;
+        let length = file
+            .metadata()
+            .await
+            .with_context(|| "Failed to read file metadata")?
+            .len();
         let mut response = Response::new(StatusCode::OK);
         response
             .insert_header(header::CONTENT_LENGTH, length.to_string())
-            .ok_or_else(|| Error::new("Failed to insert header"))?;
+            .ok_or_else(|| anyhow!("Failed to insert header"))?;
         response.set_body(FileResponse { file });
         println!("[origin] Returning file response");
         Ok(response)
@@ -70,11 +81,11 @@ impl OriginServer for FileServer {
 
 #[async_trait]
 impl ResponseBody for FileResponse {
-    async fn read_all(mut self: Box<Self>) -> io::Result<String> {
+    async fn read_all(mut self: Box<Self>, len: usize) -> io::Result<String> {
         println!("reading all");
-        let mut buf = String::new();
-        self.file.read_to_string(&mut buf).await?;
-        Ok(buf)
+        let mut buf = vec![0; len];
+        self.file.read_exact(&mut buf).await?;
+        Ok(String::from_utf8(buf).unwrap())
     }
 
     async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()> {

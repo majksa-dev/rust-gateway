@@ -6,8 +6,8 @@ use crate::{
         Result,
     },
     http::{HeaderMapExt, Request, Response},
-    Error,
 };
+use anyhow::anyhow;
 use async_trait::async_trait;
 use http::{header, StatusCode};
 
@@ -40,7 +40,7 @@ impl TMiddleware for Middleware {
             response
                 .insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
                 .ok_or_else(|| {
-                    Error::new("ACCESS_CONTROL_ALLOW_ORIGIN contains an invalid character")
+                    anyhow!("ACCESS_CONTROL_ALLOW_ORIGIN contains an invalid character")
                 })?;
             return Ok(response);
         }
@@ -80,19 +80,13 @@ impl TMiddleware for Middleware {
                     .collect::<Vec<&str>>()
                     .join(", "),
             )
-            .ok_or_else(|| {
-                Error::new("ACCESS_CONTROL_ALLOW_HEADERS contains an invalid character")
-            })?;
+            .ok_or_else(|| anyhow!("ACCESS_CONTROL_ALLOW_HEADERS contains an invalid character"))?;
         response
             .insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-            .ok_or_else(|| {
-                Error::new("ACCESS_CONTROL_ALLOW_ORIGIN contains an invalid character")
-            })?;
+            .ok_or_else(|| anyhow!("ACCESS_CONTROL_ALLOW_ORIGIN contains an invalid character"))?;
         response
             .insert_header(header::ACCESS_CONTROL_ALLOW_METHODS, method.to_string())
-            .ok_or_else(|| {
-                Error::new("ACCESS_CONTROL_ALLOW_METHODS contains an invalid character")
-            })?;
+            .ok_or_else(|| anyhow!("ACCESS_CONTROL_ALLOW_METHODS contains an invalid character"))?;
         Ok(response)
     }
 }
