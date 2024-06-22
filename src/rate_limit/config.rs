@@ -18,11 +18,23 @@ unsafe impl Sync for Config {}
 
 #[derive(Debug)]
 pub struct AppConfig {
+    pub root: Rules,
+    pub auth: HashMap<String, Rules>,
+}
+
+impl AppConfig {
+    pub fn new(root: Rules, auth: HashMap<String, Rules>) -> Self {
+        Self { root, auth }
+    }
+}
+
+#[derive(Debug)]
+pub struct Rules {
     pub quota: Option<Quota>,
     pub endpoints: HashMap<String, Quota>,
 }
 
-impl AppConfig {
+impl Rules {
     pub fn new(quota: Option<Quota>, endpoints: HashMap<String, Quota>) -> Self {
         Self { quota, endpoints }
     }

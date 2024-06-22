@@ -68,10 +68,11 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::BAD_GATEWAY));
             }
         };
-        let quota = match config
+        let rules = config.auth.get(&token).unwrap_or(&config.root);
+        let quota = match rules
             .endpoints
             .get(&ctx.endpoint_id)
-            .or(config.quota.as_ref())
+            .or(rules.quota.as_ref())
         {
             Some(quota) => quota,
             None => {

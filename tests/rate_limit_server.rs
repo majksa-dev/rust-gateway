@@ -82,22 +82,25 @@ async fn before_each() -> Context {
             rate_limit::Config::new(HashMap::from([(
                 "app".to_string(),
                 rate_limit::AppConfig::new(
-                    Some(rate_limit::Quota {
-                        total: time::Frequency {
-                            amount: 5,
-                            interval: time::Time {
-                                amount: 1,
-                                unit: time::TimeUnit::Minutes,
+                    rate_limit::Rules {
+                        quota: Some(rate_limit::Quota {
+                            total: time::Frequency {
+                                amount: 5,
+                                interval: time::Time {
+                                    amount: 1,
+                                    unit: time::TimeUnit::Minutes,
+                                },
                             },
-                        },
-                        user: Some(time::Frequency {
-                            amount: 2,
-                            interval: time::Time {
-                                amount: 1,
-                                unit: time::TimeUnit::Minutes,
-                            },
+                            user: Some(time::Frequency {
+                                amount: 2,
+                                interval: time::Time {
+                                    amount: 1,
+                                    unit: time::TimeUnit::Minutes,
+                                },
+                            }),
                         }),
-                    }),
+                        endpoints: HashMap::new(),
+                    },
                     HashMap::new(),
                 ),
             )])),
