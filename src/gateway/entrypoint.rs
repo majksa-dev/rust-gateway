@@ -1,7 +1,7 @@
 use super::{middleware::Context, next::Next, origin::Origin, router::RouterService};
 use crate::{
     gateway::Error,
-    http::{server::Handler, Request, Response, WriteResponse},
+    http::{server::Handler, HeaderMapExt, Request, Response, WriteResponse},
     server::app::GenerateKey,
     utils::{Also, AsyncAndThen},
     ReadRequest, Service,
@@ -39,7 +39,7 @@ impl Handler for EntryPointHandler {
             Err(error) => {
                 error!("{}", error);
                 if let Err(err) = left_tx
-                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
+                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                     .await
                 {
                     warn!(ip = ?ip, "Failed to write response: {}", err);
@@ -121,7 +121,10 @@ impl EntryPoint {
         let left_remains = request_reader.buffer().to_vec();
         debug!(target: "entrypoint", stage = "request", data = ?left_remains, "2 - collected request body (remains from buffer)");
         match self.handle_request(request, left_rx, left_remains).await {
-            Ok(response) => {
+            Ok(mut response) => {
+                if response.insert_header("Connection", "close").is_none() {
+                    warn!("Failed to insert header Connection: close");
+                }
                 left_tx
                     .write_response(&response)
                     .await
@@ -135,16 +138,15 @@ impl EntryPoint {
                         }
                     })
                     .await
-                    .also(|r| debug!(target: "entrypoint", stage = "response", data = ?r, "4 - wrote response body"))?;
+                    .also(|r| debug!(target: "entrypoint", stage = "response", data = ?r, "4 - wrote response body"))
             }
             Err(error) => {
                 error!("{}", error);
                 left_tx
-                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n")
-                    .await?;
+                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    .await
             }
-        };
-        Ok(())
+        }
     }
 
     async fn handle_request(
