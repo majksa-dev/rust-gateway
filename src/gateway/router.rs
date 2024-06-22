@@ -1,3 +1,4 @@
+use essentials::debug;
 use http::Method;
 use regex::Regex;
 
@@ -81,6 +82,7 @@ pub trait ParamRouteMatcher {
 
 impl ParamRouteMatcher for String {
     fn matches(&self, path: &str) -> bool {
+        debug!("Matching {} with {}", self, path);
         let mut matcher_it = self.chars().peekable();
         let mut req_it = path.chars().peekable();
         while let Some(c) = matcher_it.next() {
@@ -102,10 +104,12 @@ impl ParamRouteMatcher for String {
                 }
             } else if let Some(req_c) = req_it.next() {
                 if c != req_c {
+                    debug!("{} != {}", c, req_c);
                     return false;
                 }
             }
         }
+        debug!("Matcher: {}", req_it.peek().is_none());
         req_it.peek().is_none()
     }
 }

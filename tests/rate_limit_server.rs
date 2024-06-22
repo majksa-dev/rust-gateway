@@ -13,7 +13,11 @@ use std::net::SocketAddr;
 use testing_utils::{
     macros as utils,
     surf::{self, StatusCode},
-    testcontainers::{core::WaitFor, runners::AsyncRunner, ContainerAsync, GenericImage},
+    testcontainers::{
+        core::{ContainerPort, WaitFor},
+        runners::AsyncRunner,
+        ContainerAsync, GenericImage,
+    },
 };
 use tokio::task::JoinHandle;
 use wiremock::{
@@ -44,7 +48,7 @@ async fn before_each() -> Context {
         .mount(&mock_server)
         .await;
     let redis = GenericImage::new("redis", "7.2.4")
-        .with_exposed_port(6379)
+        .with_exposed_port(ContainerPort::Tcp(6379))
         .with_wait_for(WaitFor::message_on_stdout("Ready to accept connections"))
         .start()
         .await

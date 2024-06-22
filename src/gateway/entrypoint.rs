@@ -1,32 +1,25 @@
-use super::{
-    middleware::Context,
-    next::Next,
-    origin::{Origin, OriginResponse},
-    router::RouterService,
-    LeftStream,
-};
+use super::{middleware::Context, next::Next, origin::Origin, router::RouterService};
 use crate::{
     gateway::Error,
-    http::{server::Handler, Request, Response, WriteResponse},
-    io::WriteReader,
+    http::{server::Handler, HeaderMapExt, Request, Response, WriteResponse},
     server::app::GenerateKey,
-    utils::AsyncAndThen,
+    utils::{Also, AsyncAndThen},
     ReadRequest, Service,
 };
 use async_trait::async_trait;
+use essentials::{debug, error, info, warn};
 use http::StatusCode;
+use std::result::Result as StdResult;
 use std::{
     collections::{HashMap, VecDeque},
-    sync::{Arc, Mutex},
-};
-use std::{
-    io,
-    os::fd::{AsRawFd, FromRawFd},
-    result::Result as StdResult,
+    sync::Arc,
 };
 use tokio::{
-    io::{AsyncWriteExt, BufReader},
-    net::TcpStream,
+    io::{self, AsyncWriteExt, BufReader},
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpStream,
+    },
 };
 
 pub type Middlewares = VecDeque<Arc<Service>>;
@@ -36,36 +29,23 @@ pub struct EntryPointHandler(pub Arc<EntryPoint>);
 #[async_trait]
 impl Handler for EntryPointHandler {
     async fn handle(&self, left: TcpStream) {
-        let left_std = unsafe { std::net::TcpStream::from_raw_fd(left.as_raw_fd()) };
+        let ip = left.peer_addr().ok();
+        info!(ip = ?ip, "Connection received");
         let (left_rx, mut left_tx) = left.into_split();
-        match EntryPoint::handle(&self.0, (left_std.try_clone().unwrap(), left_rx)).await {
-            Ok((response, right_rx, right_remains)) => {
-                if let Err(err) = left_tx
-                    .write_response(&response)
-                    .await
-                    .async_and_then(|_| async {
-                        if response.forward_body {
-                            left_tx.write_all(right_remains.as_slice()).await
-                        } else {
-                            Ok(())
-                        }
-                    })
-                    .await
-                    .map(|_| left_std.write_reader(right_rx))
-                {
-                    essentials::warn!("{}", err);
-                }
+        match self.0.handle(left_rx, &mut left_tx).await {
+            Ok(_) => {
+                info!(ip = ?ip, "Connection closed");
             }
-            Err(err) => {
-                essentials::error!("{}", err);
+            Err(error) => {
+                error!("{}", error);
                 if let Err(err) = left_tx
-                    .write_all("HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n".as_bytes())
+                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                     .await
                 {
-                    essentials::warn!("{}", err);
-                }
+                    warn!(ip = ?ip, "Failed to write response: {}", err);
+                };
             }
-        };
+        }
     }
 }
 
@@ -97,92 +77,114 @@ impl EntryPoint {
     }
 
     pub async fn next(
-        entrypoint: Arc<Self>,
-        context: Arc<Context>,
+        &self,
+        context: &Context,
         request: Request,
-        left_rx: LeftStream,
+        left_rx: OwnedReadHalf,
         left_remains: Vec<u8>,
         mut it: Middlewares,
-    ) -> Result<(Response, OriginResponse, Vec<u8>)> {
+    ) -> Result<Response> {
         match it.pop_front() {
             Some(middleware) => {
-                let right = Arc::new(Mutex::new(Option::<(OriginResponse, Vec<u8>)>::None));
+                debug!(middleware = middleware.name(), request = ?request, "-->");
                 let next = Next {
-                    entrypoint: entrypoint.clone(),
-                    context: context.clone(),
-                    left: left_rx,
+                    entrypoint: self,
+                    context,
+                    left_rx,
                     left_remains,
-                    right: right.clone(),
                     it,
                 };
-                let response = middleware.run(context, request, next).await?;
-                let right = right
-                    .lock()
-                    .map_err(|_| Error::new("Mutex poisoned when returning right stream"))?
-                    .take();
-                Ok(match right {
-                    Some(right) => (response, Box::new(right.0), right.1),
-                    None => (response, Box::new(io::empty()), Vec::new()),
-                })
+                middleware
+                    .run(context, request, next)
+                    .await
+                    .also(|r| debug!(middleware = middleware.name(), response = ?r, "<--"))
             }
             None => {
-                entrypoint
-                    .origin
+                debug!(origin = self.origin.name(), request = ?request, "-->");
+                self.origin
                     .connect(context, request, left_rx, left_remains)
                     .await
+                    .also(|r| debug!(origin = self.origin.name(), response = ?r, "<--"))
             }
         }
     }
 
     pub async fn handle(
-        entrypoint: &Arc<Self>,
-        mut left_rx: LeftStream,
-    ) -> Result<(Response, OriginResponse, Vec<u8>)> {
-        let mut request_reader = BufReader::new(&mut left_rx.1);
-        let request = request_reader.read_request().await.map_err(Error::io)?;
-        let app_id = match (entrypoint.generate_peer_key)(&request) {
+        &self,
+        mut left_rx: OwnedReadHalf,
+        left_tx: &mut OwnedWriteHalf,
+    ) -> io::Result<()> {
+        debug!(target: "entrypoint", stage = "request", "0 - init");
+        let mut request_reader = BufReader::new(&mut left_rx);
+        let request = request_reader.read_request().await?;
+        debug!(target: "entrypoint", stage = "request", data = ?request, "1 - parsed request header");
+        let left_remains = request_reader.buffer().to_vec();
+        debug!(target: "entrypoint", stage = "request", data = ?left_remains, "2 - collected request body (remains from buffer)");
+        match self.handle_request(request, left_rx, left_remains).await {
+            Ok(mut response) => {
+                if response.insert_header("Connection", "close").is_none() {
+                    warn!("Failed to insert header Connection: close");
+                }
+                left_tx
+                    .write_response(&response)
+                    .await
+                    .also(|_| debug!(target: "entrypoint", stage = "response", data = ?response, "3 - wrote response"))
+                    .async_and_then(move |_| async move {
+                        if let Some(mut body) = response.body() {
+                            body.copy_to(left_tx)
+                                .await
+                        } else {
+                            Ok(())
+                        }
+                    })
+                    .await
+                    .also(|r| debug!(target: "entrypoint", stage = "response", data = ?r, "4 - wrote response body"))
+            }
+            Err(error) => {
+                error!("{}", error);
+                left_tx
+                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                    .await
+            }
+        }
+    }
+
+    async fn handle_request(
+        &self,
+        request: Request,
+        left_rx: OwnedReadHalf,
+        left_remains: Vec<u8>,
+    ) -> Result<Response> {
+        let app_id = match (self.generate_peer_key)(&request) {
             Some(app) => app,
             None => {
-                return Ok((
-                    Response::new(StatusCode::BAD_GATEWAY),
-                    Box::new(io::empty()),
-                    Vec::new(),
-                ));
+                warn!("Request could not be matched to an app ID");
+                return Ok(Response::new(StatusCode::BAD_GATEWAY));
             }
         };
-        let endpoint_id = match entrypoint.peers.get(&app_id) {
-            Some(endpoint_id) => match endpoint_id.matches(&request) {
-                Some(endpoint_id) => endpoint_id.clone(),
-                None => {
-                    return Ok((
-                        Response::new(StatusCode::FORBIDDEN),
-                        Box::new(io::empty()),
-                        Vec::new(),
-                    ));
-                }
-            },
+        debug!("App ID: {}", app_id);
+        let app = match self.peers.get(&app_id) {
+            Some(app) => app,
             None => {
-                return Ok((
-                    Response::new(StatusCode::BAD_GATEWAY),
-                    Box::new(io::empty()),
-                    Vec::new(),
-                ));
+                warn!("App ID could not be matched to an app");
+                return Ok(Response::new(StatusCode::BAD_GATEWAY));
             }
         };
+        let endpoint_id = match app.matches(&request) {
+            Some(endpoint_id) => endpoint_id.clone(),
+            None => {
+                warn!("Request could not be matched to an endpoint ID");
+                return Ok(Response::new(StatusCode::FORBIDDEN));
+            }
+        };
+        debug!("Endpoint ID: {}", endpoint_id);
         let context = Context {
             app_id,
             endpoint_id,
         };
-        let left_remains = request_reader.buffer().to_vec();
-        let it = entrypoint.middlewares.clone();
-        Self::next(
-            entrypoint.clone(),
-            Arc::new(context),
-            request,
-            left_rx,
-            left_remains,
-            it,
-        )
-        .await
+        debug!("Context: {:?}", context);
+        let it = self.middlewares.clone();
+        self.next(&context, request, left_rx, left_remains, it)
+            .await
     }
 }

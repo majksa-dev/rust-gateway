@@ -5,15 +5,13 @@ pub mod origin;
 pub mod router;
 
 pub use next::Next;
-use std::{fmt::Display, net::TcpStream};
-use tokio::{io, net::tcp::OwnedReadHalf};
+use std::fmt::Display;
+use tokio::io;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug)]
 pub struct Error(String);
-
-type LeftStream = (TcpStream, OwnedReadHalf);
 
 impl Error {
     pub fn new<S: AsRef<str>>(message: S) -> Self {
