@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use essentials::debug;
 use std::{net::SocketAddr, sync::Arc};
 use tokio::{
     io::Result,
@@ -25,8 +26,10 @@ impl<H: Handler + Send + Sync + 'static> Server<H> {
 
     pub async fn run(self) -> Result<()> {
         let listener = TcpListener::bind(self.addr).await?;
+        debug!("Listening on: {}", self.addr);
         loop {
             let (stream, _) = listener.accept().await?;
+            debug!("Accepted connection from: {}", stream.peer_addr().unwrap());
             let handler = self.handler.clone();
             tokio::spawn(async move {
                 handler.handle(stream).await;

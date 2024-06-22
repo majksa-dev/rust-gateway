@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use super::config;
 use crate::{
     gateway::{
@@ -26,7 +24,7 @@ impl Middleware {
 
 #[async_trait]
 impl TMiddleware for Middleware {
-    async fn run(&self, ctx: Arc<Context>, request: Request, next: Next) -> Result<Response> {
+    async fn run<'n>(&self, ctx: &Context, request: Request, next: Next<'n>) -> Result<Response> {
         let origin = match request
             .header(header::ORIGIN)
             .and_then(|header| header.to_str().ok())

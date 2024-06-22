@@ -1,3 +1,4 @@
+use essentials::debug;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::gateway::entrypoint::{EntryPoint, EntryPointHandler};
@@ -102,14 +103,17 @@ pub struct Server {
 impl Server {
     /// Start the server.
     pub async fn run(self) {
+        debug!("Starting server");
         let (tx_app, rx_app) = oneshot::channel();
         let (tx_health, rx_health) = oneshot::channel();
         let (tx, mut rx) = mpsc::channel(2);
         let tx_2 = tx.clone();
         tokio::spawn(async move {
             tokio::select! {
-                _ = self.app.run() => {
+                result = self.app.run() => {
+                    debug!("App stopped");
                     tx_health.send(()).unwrap();
+                    result.unwrap();
                 }
                 _ = rx_app => {}
             }
@@ -117,14 +121,17 @@ impl Server {
         });
         tokio::spawn(async move {
             tokio::select! {
-                _ = self.health_check.run() => {
+                result = self.health_check.run() => {
+                    debug!("health_check stopped");
                     tx_app.send(()).unwrap();
+                    result.unwrap();
                 }
                 _ = rx_health => {}
             }
             let _ = tx_2.send(()).await;
         });
         rx.recv().await;
+        debug!("Server stopped");
     }
 }
 

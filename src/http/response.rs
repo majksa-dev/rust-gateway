@@ -1,16 +1,26 @@
-use crate::io::error::{error, ResponseStatusLine};
-
 use super::{headers::HeaderMapExt, ReadHeaders, WriteHeaders};
+use crate::io::error::{error, ResponseStatusLine};
 use async_trait::async_trait;
 use http::{header, HeaderMap, HeaderValue, StatusCode};
-use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
+use std::fmt::Debug;
+use tokio::{
+    io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt},
+    net::tcp::OwnedWriteHalf,
+};
 
 #[derive(Debug)]
 pub struct Response {
     pub version: String,
     pub status: StatusCode,
-    pub forward_body: bool,
     headers: HeaderMap,
+    body: Option<Box<dyn ResponseBody + Send + Sync + 'static>>,
+}
+
+#[async_trait]
+pub trait ResponseBody: Debug {
+    async fn read_all(self: Box<Self>) -> io::Result<String>;
+
+    async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()>;
 }
 
 impl Response {
@@ -21,12 +31,23 @@ impl Response {
             headers: vec![(header::CONTENT_LENGTH, HeaderValue::from_static("0"))]
                 .into_iter()
                 .collect(),
-            forward_body: false,
+            body: None,
         }
     }
 
     pub fn error() -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR)
+    }
+
+    pub fn set_body<B>(&mut self, body: B)
+    where
+        B: ResponseBody + Send + Sync + 'static,
+    {
+        self.body = Some(Box::new(body));
+    }
+
+    pub fn body(self) -> Option<Box<dyn ResponseBody + Send + Sync + 'static>> {
+        self.body
     }
 }
 
@@ -100,7 +121,7 @@ where
                 .parse()
                 .map_err(|_| error(ResponseStatusLine::InvalidStatus))?,
             headers: self.read_headers().await?,
-            forward_body: true,
+            body: None,
         })
     }
 }

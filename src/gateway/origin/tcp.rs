@@ -1,22 +1,18 @@
-use super::{OriginResponse, OriginServer};
+use super::OriginServer;
 use crate::{
-    gateway::LeftStream,
-    http::{ReadResponse, Request, Response, WriteRequest},
-    io::WriteReader,
+    http::{response::ResponseBody, ReadResponse, Request, Response, WriteRequest},
     Context, Error, Result,
 };
 use async_trait::async_trait;
+use essentials::debug;
 use http::StatusCode;
-use std::{
-    collections::HashMap,
-    io,
-    net::SocketAddr,
-    os::fd::{AsRawFd, FromRawFd},
-    sync::Arc,
-};
+use std::{collections::HashMap, net::SocketAddr};
 use tokio::{
-    io::{AsyncWriteExt, BufReader},
-    net::TcpStream,
+    io::{self, AsyncReadExt, AsyncWriteExt, BufReader},
+    net::{
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+        TcpStream,
+    },
 };
 
 pub struct TcpOrigin(HashMap<String, Box<SocketAddr>>);
@@ -27,37 +23,64 @@ impl TcpOrigin {
     }
 }
 
+#[derive(Debug)]
+pub struct OriginResponse {
+    remains: Vec<u8>,
+    reader: OwnedReadHalf,
+}
+
+#[async_trait]
+impl ResponseBody for OriginResponse {
+    async fn read_all(mut self: Box<Self>) -> io::Result<String> {
+        let mut buf = String::from_utf8(self.remains)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        self.reader.read_to_string(&mut buf).await?;
+        Ok(buf)
+    }
+
+    async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()> {
+        writer.write_all(self.remains.as_slice()).await?;
+        ::io::copy_tcp(&mut self.reader, writer).await?;
+        Ok(())
+    }
+}
+
 #[async_trait]
 impl OriginServer for TcpOrigin {
     async fn connect(
         &self,
-        context: Arc<Context>,
+        context: &Context,
         request: Request,
-        left_rx: LeftStream,
+        mut left_rx: OwnedReadHalf,
         left_remains: Vec<u8>,
-    ) -> Result<(Response, OriginResponse, Vec<u8>)> {
+    ) -> Result<Response> {
         let addr = match self.0.get(&context.app_id) {
             Some(addr) => addr.to_string(),
             None => {
-                return Ok((
-                    Response::new(StatusCode::NOT_FOUND),
-                    Box::new(io::empty()),
-                    Vec::new(),
-                ));
+                return Ok(Response::new(StatusCode::NOT_FOUND));
             }
         };
         let right = TcpStream::connect(addr).await.map_err(Error::io)?;
-        let right_std = unsafe { std::net::TcpStream::from_raw_fd(right.as_raw_fd()) };
         let (mut right_rx, mut right_tx) = right.into_split();
+        debug!("Connected to origin");
         right_tx.write_request(&request).await.map_err(Error::io)?;
+        debug!("Request sent to origin: {:?}", request);
         right_tx
             .write_all(left_remains.as_slice())
             .await
             .map_err(Error::io)?;
-        right_std.try_clone().unwrap().write_reader(left_rx.0);
+        debug!("Remains sent to origin: {:?}", left_remains);
+        tokio::spawn(async move {
+            ::io::copy_tcp(&mut left_rx, &mut right_tx).await.unwrap();
+        });
+        debug!("Body sent to origin");
         let mut response_reader = BufReader::new(&mut right_rx);
-        let response = response_reader.read_response().await.map_err(Error::io)?;
+        let mut response = response_reader.read_response().await.map_err(Error::io)?;
         let right_remains = response_reader.buffer().to_vec();
-        Ok((response, Box::new(right_std), right_remains))
+        response.set_body(OriginResponse {
+            remains: right_remains,
+            reader: right_rx,
+        });
+        Ok(response)
     }
 }

@@ -1,10 +1,6 @@
-use std::sync::Arc;
-
-use async_trait::async_trait;
-
-use crate::http::{Request, Response};
-
 use super::{next::Next, Result};
+use crate::http::{Request, Response};
+use async_trait::async_trait;
 
 pub type Service = Box<dyn Middleware + Send + Sync + 'static>;
 
@@ -16,5 +12,9 @@ pub struct Context {
 
 #[async_trait]
 pub trait Middleware: Sync {
-    async fn run(&self, ctx: Arc<Context>, request: Request, next: Next) -> Result<Response>;
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
+
+    async fn run<'n>(&self, ctx: &Context, request: Request, next: Next<'n>) -> Result<Response>;
 }
