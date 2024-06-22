@@ -87,6 +87,8 @@
 //!     .await;
 //! }
 //! ```
+#[cfg(feature = "cache")]
+pub mod cache;
 #[cfg(feature = "cors")]
 pub mod cors;
 pub(crate) mod gateway;
@@ -102,7 +104,7 @@ pub use gateway::{
     middleware::{Context, Middleware, Service},
     origin::{Origin, OriginResponse, OriginServer, TcpOrigin},
     router::{ParamRouter, RegexRouter, Router, RouterService},
-    Error, Next, Result,
+    Next, Result,
 };
 pub use http::{
     server::{Handler, Server as HttpServer},

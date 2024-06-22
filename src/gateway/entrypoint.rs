@@ -1,15 +1,14 @@
 use super::{middleware::Context, next::Next, origin::Origin, router::RouterService};
 use crate::{
-    gateway::Error,
     http::{server::Handler, HeaderMapExt, Request, Response, WriteResponse},
     server::app::GenerateKey,
     utils::{Also, AsyncAndThen},
     ReadRequest, Service,
 };
+use anyhow::Result;
 use async_trait::async_trait;
 use essentials::{debug, error, info, warn};
 use http::StatusCode;
-use std::result::Result as StdResult;
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -58,8 +57,6 @@ pub struct EntryPoint {
 
 unsafe impl Sync for EntryPoint {}
 unsafe impl Send for EntryPoint {}
-
-type Result<T> = StdResult<T, Error>;
 
 impl EntryPoint {
     pub fn new(

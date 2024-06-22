@@ -6,8 +6,8 @@ use crate::{
         Result,
     },
     http::{HeaderMapExt, Request, Response},
-    Error,
 };
+use anyhow::anyhow;
 use async_trait::async_trait;
 use essentials::warn;
 use http::{header, StatusCode};
@@ -35,7 +35,7 @@ impl Middleware {
                 header::RETRY_AFTER,
                 reset.saturating_sub(chrono::Utc::now().timestamp() as usize),
             )
-            .ok_or_else(|| Error::new("RETRY_AFTER contains an invalid character"))?;
+            .ok_or_else(|| anyhow!("RETRY_AFTER contains an invalid character"))?;
         Ok(response)
     }
 }
@@ -85,11 +85,7 @@ impl TMiddleware for Middleware {
         let rate_limit = {
             use datastore::Response::*;
             match quota.user.as_ref() {
-                Some(frequency) => match self
-                    .datastore
-                    .get_rate_limit(&user_key, frequency)
-                    .await
-                    .map_err(Error::new)?
+                Some(frequency) => match self.datastore.get_rate_limit(&user_key, frequency).await?
                 {
                     Ok(rate_limit) => Some(rate_limit),
                     Limited(reset) => {
@@ -104,8 +100,7 @@ impl TMiddleware for Middleware {
             if let Limited(reset) = self
                 .datastore
                 .get_rate_limit(&total_key, &quota.total)
-                .await
-                .map_err(Error::new)?
+                .await?
             {
                 return Self::too_many_requests(reset);
             };
@@ -114,10 +109,10 @@ impl TMiddleware for Middleware {
         if let Some(rate_limit) = rate_limit {
             response
                 .insert_header("RateLimit-Limit", rate_limit.limit)
-                .ok_or_else(|| Error::new("RateLimit-Limit contains an invalid character"))?;
+                .ok_or_else(|| anyhow!("RateLimit-Limit contains an invalid character"))?;
             response
                 .insert_header("RateLimit-Remaining", rate_limit.remaining)
-                .ok_or_else(|| Error::new("RateLimit-Remaining contains an invalid character"))?;
+                .ok_or_else(|| anyhow!("RateLimit-Remaining contains an invalid character"))?;
             response
                 .insert_header(
                     "RateLimit-Reset",
@@ -125,7 +120,7 @@ impl TMiddleware for Middleware {
                         .reset
                         .saturating_sub(chrono::Utc::now().timestamp() as usize),
                 )
-                .ok_or_else(|| Error::new("RateLimit-Reset contains an invalid character"))?;
+                .ok_or_else(|| anyhow!("RateLimit-Reset contains an invalid character"))?;
         }
         Ok(response)
     }
