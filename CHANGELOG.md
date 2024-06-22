@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/majksa-dev/rust-gateway/compare/v0.3.0...v0.4.0) (2024-06-22)
+
+
+### Features
+
+* add caching middleware ([#23](https://github.com/majksa-dev/rust-gateway/issues/23)) ([682671a](https://github.com/majksa-dev/rust-gateway/commit/682671a62fb37edcd7c3ca711cd3780e3c83c8b1))
+
 ## [0.3.0](https://github.com/majksa-dev/rust-gateway/compare/v0.2.2...v0.3.0) (2024-06-22)
 
 
