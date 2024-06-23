@@ -1,5 +1,11 @@
+use std::fmt::Debug;
+
 use async_trait::async_trait;
-use http::{header::GetAll, HeaderMap, HeaderName, HeaderValue};
+use essentials::warn;
+use http::{
+    header::{AsHeaderName, GetAll, IntoHeaderName},
+    HeaderMap, HeaderName, HeaderValue,
+};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::io::error::{error, Headers};
@@ -73,19 +79,21 @@ pub trait HeaderMapExt {
             .ok()
     }
 
-    fn insert_header<K: TryInto<HeaderName>, V: TryInto<HeaderValue>>(
+    fn insert_header(
         &mut self,
-        key: K,
-        value: V,
-    ) -> Option<()> {
-        self.headers_mut()
-            .insert(key.try_into().ok()?, value.try_into().ok()?);
-        Some(())
+        key: impl IntoHeaderName + Debug,
+        value: impl TryInto<HeaderValue>,
+    ) {
+        let value = value.try_into().ok();
+        if let Some(value) = value {
+            self.headers_mut().insert(key, value);
+        } else {
+            warn!(?key, ?value, "Failed to insert header");
+        }
     }
 
-    fn remove_header(&mut self, key: impl TryInto<HeaderName>) -> Option<()> {
-        self.headers_mut().remove(key.try_into().ok()?);
-        Some(())
+    fn remove_header(&mut self, key: impl AsHeaderName) {
+        self.headers_mut().remove(key);
     }
 
     fn header<K: TryInto<HeaderName>>(&self, key: K) -> Option<&HeaderValue> {

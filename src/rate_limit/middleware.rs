@@ -7,7 +7,6 @@ use crate::{
     },
     http::{HeaderMapExt, Request, Response},
 };
-use anyhow::anyhow;
 use async_trait::async_trait;
 use essentials::warn;
 use http::{header, StatusCode};
@@ -28,15 +27,13 @@ impl Middleware {
         }
     }
 
-    fn too_many_requests(reset: usize) -> Result<Response> {
+    fn too_many_requests(reset: usize) -> Response {
         let mut response = Response::new(StatusCode::TOO_MANY_REQUESTS);
+        response.insert_header(
+            header::RETRY_AFTER,
+            reset.saturating_sub(chrono::Utc::now().timestamp() as usize),
+        );
         response
-            .insert_header(
-                header::RETRY_AFTER,
-                reset.saturating_sub(chrono::Utc::now().timestamp() as usize),
-            )
-            .ok_or_else(|| anyhow!("RETRY_AFTER contains an invalid character"))?;
-        Ok(response)
     }
 }
 
@@ -84,44 +81,38 @@ impl TMiddleware for Middleware {
         let user_key = format!("{}--{}--{}", ctx.app_id, ctx.endpoint_id, ip);
 
         let rate_limit = {
-            use datastore::Response::*;
+            use datastore::Response;
             match quota.user.as_ref() {
                 Some(frequency) => match self.datastore.get_rate_limit(&user_key, frequency).await?
                 {
-                    Ok(rate_limit) => Some(rate_limit),
-                    Limited(reset) => {
-                        return Self::too_many_requests(reset);
+                    Response::Ok(rate_limit) => Some(rate_limit),
+                    Response::Limited(reset) => {
+                        return Ok(Self::too_many_requests(reset));
                     }
                 },
                 None => None,
             }
         };
         {
-            use datastore::Response::*;
-            if let Limited(reset) = self
+            use datastore::Response;
+            if let Response::Limited(reset) = self
                 .datastore
                 .get_rate_limit(&total_key, &quota.total)
                 .await?
             {
-                return Self::too_many_requests(reset);
+                return Ok(Self::too_many_requests(reset));
             };
         }
         let mut response = next.run(request).await?;
         if let Some(rate_limit) = rate_limit {
-            response
-                .insert_header("RateLimit-Limit", rate_limit.limit)
-                .ok_or_else(|| anyhow!("RateLimit-Limit contains an invalid character"))?;
-            response
-                .insert_header("RateLimit-Remaining", rate_limit.remaining)
-                .ok_or_else(|| anyhow!("RateLimit-Remaining contains an invalid character"))?;
-            response
-                .insert_header(
-                    "RateLimit-Reset",
-                    rate_limit
-                        .reset
-                        .saturating_sub(chrono::Utc::now().timestamp() as usize),
-                )
-                .ok_or_else(|| anyhow!("RateLimit-Reset contains an invalid character"))?;
+            response.insert_header("RateLimit-Limit", rate_limit.limit);
+            response.insert_header("RateLimit-Remaining", rate_limit.remaining);
+            response.insert_header(
+                "RateLimit-Reset",
+                rate_limit
+                    .reset
+                    .saturating_sub(chrono::Utc::now().timestamp() as usize),
+            );
         }
         Ok(response)
     }

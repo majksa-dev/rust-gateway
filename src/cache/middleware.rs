@@ -1,17 +1,13 @@
 use super::{config, datastore, response::CachedResponseBody, Datastore};
 use crate::{
-    gateway::{
-        middleware::{Context, Middleware as TMiddleware},
-        next::Next,
-        Result,
-    },
+    gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
     http::{HeaderMapExt, Request, Response},
     time::TimeUnit,
 };
-use anyhow::anyhow;
+use anyhow::Context;
 use async_trait::async_trait;
 use essentials::{debug, warn};
-use http::{header, StatusCode};
+use http::{header, HeaderName, StatusCode};
 use pingora_cache::{
     key::{hash_key, CacheHashKey, CompactCacheKey},
     VarianceBuilder,
@@ -38,7 +34,7 @@ impl Middleware {
 impl TMiddleware for Middleware {
     async fn run<'n>(
         &self,
-        ctx: &Context,
+        ctx: &crate::Context,
         mut request: Request,
         next: Next<'n>,
     ) -> Result<Response> {
@@ -83,15 +79,18 @@ impl TMiddleware for Middleware {
                 Hit(cached, ttl) => {
                     let mut response = Response::new(StatusCode::OK);
                     response.set_body(CachedResponseBody::new(cached.response));
-                    for header_raw in cached.headers.lines() {
+                    for header_raw in cached.headers.split('\n') {
                         let mut parts = header_raw.splitn(2, ": ");
                         if let (Some(key), Some(value)) = (parts.next(), parts.next()) {
-                            response.insert_header(key, value);
+                            response.insert_header(
+                                TryInto::<HeaderName>::try_into(key).with_context(|| {
+                                    format!("Failed to convert header name: {}", key)
+                                })?,
+                                value,
+                            );
                         }
                     }
-                    response
-                        .insert_header(header::CACHE_CONTROL, format!("max-age={}", ttl))
-                        .ok_or_else(|| anyhow!("CACHE_CONTROL contains an invalid character"))?;
+                    response.insert_header(header::CACHE_CONTROL, format!("max-age={}", ttl));
                     return Ok(response);
                 }
                 Expired(etag) => etag,
@@ -100,9 +99,7 @@ impl TMiddleware for Middleware {
         };
         debug!(etag = etag, key = key, "Fetching response from origin");
         if let Some(etag) = &etag {
-            request
-                .insert_header("If-None-Match", etag.clone())
-                .ok_or_else(|| anyhow!("If-None-Match contains an invalid character"))?;
+            request.insert_header("If-None-Match", etag.clone());
         }
         debug!("Fetching response from origin for key: {}", key);
         let origin_response = next.run(request).await?;
@@ -111,9 +108,7 @@ impl TMiddleware for Middleware {
             use datastore::Response::*;
             if let Hit(data, ttl) = self.datastore.refresh_cache(key.as_str(), ttl).await? {
                 let mut response = Response::new(StatusCode::OK);
-                response
-                    .insert_header(header::CACHE_CONTROL, format!("max-age={}", ttl))
-                    .ok_or_else(|| anyhow!("CACHE_CONTROL contains an invalid character"))?;
+                response.insert_header(header::CACHE_CONTROL, format!("max-age={}", ttl));
                 response.set_body(CachedResponseBody::new(data.response));
                 return Ok(response);
             };
@@ -145,9 +140,7 @@ impl TMiddleware for Middleware {
             .save_cache(key.as_str(), body.clone(), origin_headers, etag, ttl)
             .await?;
         response.set_body(CachedResponseBody::new(body));
-        response
-            .insert_header(header::CACHE_CONTROL, format!("max-age={}", ttl))
-            .ok_or_else(|| anyhow!("CACHE_CONTROL contains an invalid character"))?;
+        response.insert_header(header::CACHE_CONTROL, format!("max-age={}", ttl));
         Ok(response)
     }
 }

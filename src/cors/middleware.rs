@@ -7,7 +7,6 @@ use crate::{
     },
     http::{HeaderMapExt, Request, Response},
 };
-use anyhow::anyhow;
 use async_trait::async_trait;
 use http::{header, StatusCode};
 
@@ -37,11 +36,7 @@ impl TMiddleware for Middleware {
         };
         if request.method == http::Method::OPTIONS {
             let mut response = Response::new(StatusCode::NO_CONTENT);
-            response
-                .insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-                .ok_or_else(|| {
-                    anyhow!("ACCESS_CONTROL_ALLOW_ORIGIN contains an invalid character")
-                })?;
+            response.insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
             return Ok(response);
         }
         let method = request.method.clone();
@@ -70,23 +65,17 @@ impl TMiddleware for Middleware {
         }
 
         let mut response = next.run(request).await?;
-        response
-            .insert_header(
-                header::ACCESS_CONTROL_ALLOW_HEADERS,
-                response
-                    .headers()
-                    .keys()
-                    .map(|key| key.as_str())
-                    .collect::<Vec<&str>>()
-                    .join(", "),
-            )
-            .ok_or_else(|| anyhow!("ACCESS_CONTROL_ALLOW_HEADERS contains an invalid character"))?;
-        response
-            .insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-            .ok_or_else(|| anyhow!("ACCESS_CONTROL_ALLOW_ORIGIN contains an invalid character"))?;
-        response
-            .insert_header(header::ACCESS_CONTROL_ALLOW_METHODS, method.to_string())
-            .ok_or_else(|| anyhow!("ACCESS_CONTROL_ALLOW_METHODS contains an invalid character"))?;
+        response.insert_header(
+            header::ACCESS_CONTROL_ALLOW_HEADERS,
+            response
+                .headers()
+                .keys()
+                .map(|key| key.as_str())
+                .collect::<Vec<&str>>()
+                .join(", "),
+        );
+        response.insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+        response.insert_header(header::ACCESS_CONTROL_ALLOW_METHODS, method.to_string());
         Ok(response)
     }
 }

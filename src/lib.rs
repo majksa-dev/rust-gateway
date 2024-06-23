@@ -3,7 +3,7 @@
 //! # Example usage
 //!
 //! ```
-//! use anyhow::{anyhow, Context};
+//! use anyhow::Context;
 //! use async_trait::async_trait;
 //! use essentials::info;
 //! use gateway::{
@@ -32,8 +32,7 @@
 //!         println!("[gateway] before");
 //!         let mut response = next.run(request).await?;
 //!         println!("[gateway] after");
-//!         response.insert_header("X-Server", "Rust").unwrap();
-//!         response.insert_header(header::CONNECTION, "close").unwrap();
+//!         response.insert_header("X-Server", "Rust");
 //!         Ok(response)
 //!     }
 //! }
@@ -75,9 +74,7 @@
 //!             .with_context(|| "Failed to read file metadata")?
 //!             .len();
 //!         let mut response = Response::new(StatusCode::OK);
-//!         response
-//!             .insert_header(header::CONTENT_LENGTH, length.to_string())
-//!             .ok_or_else(|| anyhow!("Failed to insert header"))?;
+//!         response.insert_header(header::CONTENT_LENGTH, length.to_string());
 //!         response.set_body(FileResponse { file });
 //!         println!("[origin] Returning file response");
 //!         Ok(response)
