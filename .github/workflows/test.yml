@@ -8,7 +8,5 @@ on:
 jobs:
   rust:
     uses: majksa-actions/workflows/.github/workflows/rust-test.yml@v1
-    with:
-      toolchain: '["stable"]'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
