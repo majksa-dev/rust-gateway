@@ -8,7 +8,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use essentials::{debug, error, info, warn};
-use http::StatusCode;
+use http::{header, StatusCode};
 use std::{
     collections::{HashMap, VecDeque},
     sync::Arc,
@@ -119,9 +119,7 @@ impl EntryPoint {
         debug!(target: "entrypoint", stage = "request", data = ?left_remains, "2 - collected request body (remains from buffer)");
         match self.handle_request(request, left_rx, left_remains).await {
             Ok(mut response) => {
-                if response.insert_header("Connection", "close").is_none() {
-                    warn!("Failed to insert header Connection: close");
-                }
+                response.insert_header(header::CONNECTION, "close");
                 left_tx
                     .write_response(&response)
                     .await
