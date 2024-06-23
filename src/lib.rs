@@ -181,6 +181,8 @@
 //!     info!("Gateway stopped");
 //! }
 //! ```
+#[cfg(feature = "auth")]
+pub mod auth;
 #[cfg(feature = "cache")]
 pub mod cache;
 #[cfg(feature = "cors")]
