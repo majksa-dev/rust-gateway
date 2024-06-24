@@ -3,7 +3,6 @@ use crate::{
     gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
     http::{HeaderMapExt, Request, Response},
 };
-use anyhow::Context;
 use async_trait::async_trait;
 use http::{header, HeaderName, StatusCode};
 
@@ -44,12 +43,12 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
         };
-        if !authorization.starts_with("Bearer ") || authorization.len() <= "Bearer ".len() {
-            return Ok(Response::new(StatusCode::UNAUTHORIZED));
-        }
-        let token = authorization
-            .strip_prefix("Bearer ")
-            .with_context(|| "Failed to strip 'Bearer ' prefix from Authorization header")?;
+        let token = match authorization.strip_prefix("Bearer ") {
+            Some(token) => token,
+            None => {
+                return Ok(Response::new(StatusCode::UNAUTHORIZED));
+            }
+        };
         let claims = match app.authenticate(token, &ctx.endpoint_id).await {
             Some(claims) => claims,
             None => {
