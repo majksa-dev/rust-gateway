@@ -2,8 +2,8 @@ use anyhow::Result;
 use jsonwebtoken::jwk::JwkSet;
 
 pub async fn fetch_keys(keys_url: reqwest::Url) -> Result<JwkSet> {
-    let set: JwkSet = reqwest::get(keys_url).await?.json().await?;
-    Ok(set)
+    let bytes = reqwest::get(keys_url).await?.bytes().await?;
+    Ok(serde_json::from_slice(&bytes)?)
 }
 
 #[cfg(test)]
