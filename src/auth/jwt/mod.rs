@@ -1,6 +1,6 @@
 mod config;
 mod context;
-mod jwt;
+mod token;
 mod middleware;
 
 pub use config::*;
