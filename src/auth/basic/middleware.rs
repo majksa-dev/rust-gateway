@@ -38,8 +38,14 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
         };
+        let auth = match authorization.strip_prefix("Basic ") {
+            Some(auth) => auth,
+            None => {
+                return Ok(Response::new(StatusCode::UNAUTHORIZED));
+            }
+        };
         let credentials = URL_SAFE
-            .decode(authorization)
+            .decode(auth)
             .with_context(|| "Failed to decode Authorization header")
             .and_then(|decoded| {
                 let decoded = String::from_utf8(decoded).map_err(|_| anyhow!("Invalid UTF-8"))?;

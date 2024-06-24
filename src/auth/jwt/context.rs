@@ -1,6 +1,8 @@
+use crate::auth::Enable;
+
 use super::{
     token::{self, fetch_keys, Algorithm, ClaimParser, Validation},
-    AppConfig, Claim, Config, Enable,
+    AppConfig, Claim, Config,
 };
 use anyhow::Result;
 use essentials::warn;

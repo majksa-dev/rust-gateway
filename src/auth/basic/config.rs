@@ -1,4 +1,6 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+
+use crate::auth::Enable;
 
 #[derive(Debug)]
 pub struct Config {
@@ -13,21 +15,6 @@ impl Config {
 
 unsafe impl Send for Config {}
 unsafe impl Sync for Config {}
-
-#[derive(Debug)]
-pub enum Enable {
-    All,
-    Endpoints(HashSet<String>),
-}
-
-impl Enable {
-    pub fn is_enabled(&self, endpoint: &String) -> bool {
-        match self {
-            Self::All => true,
-            Self::Endpoints(endpoints) => endpoints.contains(endpoint),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct AppConfig {
