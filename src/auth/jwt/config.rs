@@ -15,23 +15,23 @@ impl Config {
 
 #[derive(Debug)]
 pub struct AppConfig {
-    pub rules: Vec<AuthConfig>,
+    pub rules: Vec<Auth>,
 }
 
 impl AppConfig {
-    pub fn new(rules: Vec<AuthConfig>) -> Self {
+    pub fn new(rules: Vec<Auth>) -> Self {
         Self { rules }
     }
 }
 
 #[derive(Debug)]
-pub struct AuthConfig {
+pub struct Auth {
     pub enable: Enable,
     pub keys_url: reqwest::Url,
     pub claims: Vec<Claim>,
 }
 
-impl AuthConfig {
+impl Auth {
     pub fn new(enable: Enable, keys_url: reqwest::Url, claims: Vec<Claim>) -> Self {
         Self {
             enable,

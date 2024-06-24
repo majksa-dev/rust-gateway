@@ -36,5 +36,3 @@ testing-utils = { tag = "0.1.4", git = "https://github.com/majksa-dev/rust-testi
 pretty_assertions = "1.4.0"
 wiremock = "0.6.0"
 mock_instant = "0.5.1"
-jwt = "0.16.0"
-hmac = "0.12.1"
