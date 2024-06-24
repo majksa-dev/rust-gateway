@@ -1843,7 +1843,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -2097,8 +2097,8 @@ dependencies = [
 
 [[package]]
 name = "io"
-version = "0.2.1"
-source = "git+https://github.com/majksa-dev/rust-io?tag=0.2.1#c000c9b2889104139e4fbd9c0d463d49f70f2866"
+version = "0.2.2"
+source = "git+https://github.com/majksa-dev/rust-io?tag=0.2.2#83b649cf607663776bc022f0d4ea0bedf30150b7"
 dependencies = [
  "chrono",
  "derive_more",
@@ -2756,7 +2756,7 @@ dependencies = [
  "serde",
  "serde_yaml",
  "sfv",
- "socket2 0.5.7",
+ "socket2 0.4.10",
  "structopt",
  "thread_local",
  "tokio",
@@ -2807,7 +2807,7 @@ dependencies = [
  "arrayvec",
  "hashbrown 0.14.5",
  "parking_lot",
- "rand 0.8.5",
+ "rand 0.7.3",
 ]
 
 [[package]]
