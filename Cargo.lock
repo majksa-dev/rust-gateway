@@ -785,7 +785,7 @@ dependencies = [
  "aes-gcm",
  "base64 0.13.1",
  "hkdf",
- "hmac 0.10.1",
+ "hmac",
  "percent-encoding",
  "rand 0.8.5",
  "sha2 0.9.9",
@@ -1432,11 +1432,9 @@ dependencies = [
  "chrono",
  "essentials",
  "futures",
- "hmac 0.12.1",
  "http 1.1.0",
  "io",
  "jsonwebtoken",
- "jwt",
  "mock_instant",
  "pingora-cache",
  "pretty_assertions",
@@ -1685,7 +1683,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "51ab2f639c231793c5f6114bdb9bbe50a7dbbfcd7c7c6bd8475dec2d991e964f"
 dependencies = [
  "digest 0.9.0",
- "hmac 0.10.1",
+ "hmac",
 ]
 
 [[package]]
@@ -1696,15 +1694,6 @@ checksum = "c1441c6b1e930e2817404b5046f1f989899143a12bf92de603b69f4e0aee1e15"
 dependencies = [
  "crypto-mac",
  "digest 0.9.0",
-]
-
-[[package]]
-name = "hmac"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c49c37c09c17a53d937dfbb742eb3a961d65a994e6bcdcf37e7399d0cc8ab5e"
-dependencies = [
- "digest 0.10.7",
 ]
 
 [[package]]
@@ -2218,21 +2207,6 @@ dependencies = [
  "serde",
  "serde_json",
  "simple_asn1",
-]
-
-[[package]]
-name = "jwt"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6204285f77fe7d9784db3fdc449ecce1a0114927a51d5a41c4c7a292011c015f"
-dependencies = [
- "base64 0.13.1",
- "crypto-common",
- "digest 0.10.7",
- "hmac 0.12.1",
- "serde",
- "serde_json",
- "sha2 0.10.8",
 ]
 
 [[package]]
