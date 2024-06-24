@@ -1,7 +1,5 @@
 use std::collections::{HashMap, HashSet};
 
-use openidconnect::IssuerUrl;
-
 #[derive(Debug)]
 pub struct Config {
     pub apps: HashMap<String, AppConfig>,
@@ -42,15 +40,15 @@ impl AppConfig {
 #[derive(Debug)]
 pub struct AuthConfig {
     pub enable: Enable,
-    pub issuer_url: IssuerUrl,
+    pub keys_url: reqwest::Url,
     pub claims: Vec<Claim>,
 }
 
 impl AuthConfig {
-    pub fn new(enable: Enable, issuer_url: IssuerUrl, claims: Vec<Claim>) -> Self {
+    pub fn new(enable: Enable, keys_url: reqwest::Url, claims: Vec<Claim>) -> Self {
         Self {
             enable,
-            issuer_url,
+            keys_url,
             claims,
         }
     }

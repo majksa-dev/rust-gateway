@@ -1,10 +1,12 @@
 use super::{
-    jwt::{self, fetch_keys},
+    token::{self, fetch_keys, Algorithm, ClaimParser, Validation},
     AppConfig, Claim, Config, Enable,
 };
 use anyhow::Result;
+use essentials::warn;
 use futures::future::join_all;
-use openidconnect::core::CoreJsonWebKey;
+use jsonwebtoken::jwk::JwkSet;
+use serde_json::Value;
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -37,8 +39,8 @@ pub struct App {
 
 impl App {
     pub async fn new(config: AppConfig) -> Result<Self> {
-        let rules = join_all(config.rules.into_iter().map(|config| async {
-            fetch_keys(config.issuer_url)
+        let rules = join_all(config.rules.into_iter().map(move |config| async move {
+            fetch_keys(config.keys_url)
                 .await
                 .map(|keys| Auth::new(config.enable, keys, config.claims))
         }))
@@ -56,15 +58,16 @@ impl App {
         for auth in self.rules.iter() {
             if auth.enable.is_enabled(endpoint) {
                 return auth.authenticate(token).await.and_then(|claims| {
-                    claims
-                        .into_iter()
-                        .map(|(key, value)| {
-                            auth.claims
-                                .iter()
-                                .find(|claim| key == claim.claim)
-                                .map(|claim| (&claim.header, value))
+                    auth.claims
+                        .iter()
+                        .map(|claim| {
+                            claims
+                                .parse(claim.claim.as_str())
+                                .map(|value| (&claim.header, value))
                         })
-                        .collect::<Option<Vec<_>>>()
+                        .collect::<Result<Vec<_>>>()
+                        .map_err(|e| warn!("Failed to parse claim: {}", e))
+                        .ok()
                 });
             }
         }
@@ -75,12 +78,12 @@ impl App {
 #[derive(Debug)]
 pub struct Auth {
     pub enable: Enable,
-    pub keys: Vec<CoreJsonWebKey>,
+    pub keys: JwkSet,
     pub claims: Vec<Claim>,
 }
 
 impl Auth {
-    pub fn new(enable: Enable, keys: Vec<CoreJsonWebKey>, claims: Vec<Claim>) -> Self {
+    pub fn new(enable: Enable, keys: JwkSet, claims: Vec<Claim>) -> Self {
         Self {
             enable,
             keys,
@@ -88,7 +91,7 @@ impl Auth {
         }
     }
 
-    async fn authenticate(&self, token: &str) -> Option<HashMap<String, String>> {
-        jwt::parse_token(token, &self.keys).await
+    async fn authenticate(&self, token: &str) -> Option<Value> {
+        token::parse_token(token, &self.keys.keys, &Validation::new(Algorithm::RS256)).await
     }
 }
