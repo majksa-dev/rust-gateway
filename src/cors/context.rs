@@ -22,20 +22,24 @@ impl AppConfig {
 #[derive(Debug)]
 pub struct Auth {
     pub token: String,
-    pub origins: Box<[String]>,
+    pub origins: Option<Box<[String]>>,
 }
 
 impl Auth {
-    fn new(token: String, origins: Box<[String]>) -> Self {
+    fn new(token: String, origins: Option<Box<[String]>>) -> Self {
         Self { token, origins }
     }
 
+    pub fn is_any_origin_allowed(&self) -> bool {
+        self.origins.is_none()
+    }
+
     pub fn is_origin_allowed(&self, origin: impl AsRef<str>) -> bool {
-        self.origins.len() == 0
-            || self
-                .origins
+        self.origins.as_ref().is_some_and(|origins| {
+            origins
                 .iter()
                 .any(|allowed_origin| allowed_origin == origin.as_ref())
+        })
     }
 }
 
@@ -47,7 +51,7 @@ impl ConfigToContext for config::AppConfig {
         Ok(AppConfig::new(
             self.rules
                 .into_iter()
-                .map(|config| Auth::new(config.token, config.origins.into_boxed_slice()))
+                .map(|config| Auth::new(config.token, config.origins.map(Into::into)))
                 .collect::<Vec<_>>()
                 .into_boxed_slice(),
         ))

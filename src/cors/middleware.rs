@@ -25,6 +25,30 @@ impl TMiddleware for Middleware {
         {
             Some(origin) => origin,
             None => {
+                let config = match self.0.get(ctx.app_id) {
+                    Some(config) => config,
+                    None => {
+                        return Ok(Response::new(StatusCode::UNAUTHORIZED));
+                    }
+                }
+                .global();
+                let token = match request
+                    .header("X-Api-Token")
+                    .and_then(|header| header.to_str().ok())
+                    .map(|header| header.to_string())
+                {
+                    Some(token) => token,
+                    None => {
+                        return Ok(Response::new(StatusCode::UNAUTHORIZED));
+                    }
+                };
+                if let Some(auth) = config.find_auth(&token) {
+                    if !auth.is_any_origin_allowed() {
+                        return Ok(Response::new(StatusCode::FORBIDDEN));
+                    }
+                } else {
+                    return Ok(Response::new(StatusCode::UNAUTHORIZED));
+                }
                 return Ok(Response::new(StatusCode::BAD_REQUEST));
             }
         };

@@ -21,15 +21,30 @@ impl Builder {
         Self::default()
     }
 
-    pub fn add_auth(mut self, app: &str, token: String, origins: Vec<String>) -> Self {
+    pub fn add_token(mut self, app: &str, token: String) -> Self {
         match self.0.get_mut(app) {
             Some(config) => {
-                config.rules.push(config::Auth::new(token, origins));
+                config.rules.push(config::Auth::new(token, None));
             }
             None => {
                 self.0.insert(
                     app.to_string(),
-                    config::AppConfig::new(vec![config::Auth::new(token, origins)]),
+                    config::AppConfig::new(vec![config::Auth::new(token, None)]),
+                );
+            }
+        };
+        self
+    }
+
+    pub fn add_auth(mut self, app: &str, token: String, origins: Vec<String>) -> Self {
+        match self.0.get_mut(app) {
+            Some(config) => {
+                config.rules.push(config::Auth::new(token, Some(origins)));
+            }
+            None => {
+                self.0.insert(
+                    app.to_string(),
+                    config::AppConfig::new(vec![config::Auth::new(token, Some(origins))]),
                 );
             }
         };

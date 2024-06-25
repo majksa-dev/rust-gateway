@@ -12,11 +12,11 @@ impl AppConfig {
 #[derive(Debug)]
 pub struct Auth {
     pub token: String,
-    pub origins: Vec<String>,
+    pub origins: Option<Vec<String>>,
 }
 
 impl Auth {
-    pub fn new(token: String, origins: Vec<String>) -> Self {
+    pub fn new(token: String, origins: Option<Vec<String>>) -> Self {
         Self { token, origins }
     }
 }
