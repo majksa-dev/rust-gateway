@@ -1,11 +1,10 @@
 use chrono::{Duration, Utc};
 use essentials::debug;
-use gateway::{auth, http::HeaderMapExt, ParamRouter, TcpOrigin};
+use gateway::{auth, http::HeaderMapExt, tcp, ParamRouterBuilder};
 use http::{header, Method};
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use pretty_assertions::assert_eq;
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use testing_utils::{
@@ -41,16 +40,16 @@ async fn before_each() -> Context {
         env::set_var("APP_ENV", "d");
         essentials::install();
     }
-    let (mock_server, origin) = {
+    let (mock_server, mock_addr) = {
         let listener = std::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).unwrap();
-        let port = listener.local_addr().unwrap().port();
+        let mock_addr = listener.local_addr().unwrap();
         let server = MockServer::builder().listener(listener).start().await;
         Mock::given(method("GET"))
             .and(path("/hello"))
             .respond_with(RespondWithEmailHeader)
             .mount(&server)
             .await;
-        (server, port)
+        (server, mock_addr)
     };
     let (jwt_server, encoding_key) = {
         let encoding_key = EncodingKey::from_rsa_pem(PRIVATE_KEY.as_bytes()).unwrap();
@@ -76,10 +75,9 @@ async fn before_each() -> Context {
     };
     let ports = testing_utils::get_random_ports(2);
     let server = gateway::builder(
-        TcpOrigin::new(HashMap::from([(
-            "app".to_string(),
-            Box::new(SocketAddr::from(([127, 0, 0, 1], origin))),
-        )])),
+        tcp::Builder::new()
+            .add_peer("app", tcp::config::Connection::new(mock_addr))
+            .build(),
         |request| {
             request
                 .header(header::HOST)
@@ -91,26 +89,27 @@ async fn before_each() -> Context {
     .with_health_check_port(ports[1])
     .register_peer(
         "app".to_string(),
-        ParamRouter::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
+        ParamRouterBuilder::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
     )
     .register_middleware(
         1,
-        auth::jwt::Middleware::new(auth::jwt::Config::new(HashMap::from([(
-            "app".to_string(),
-            auth::jwt::AppConfig::new(vec![auth::jwt::Auth::new(
-                auth::Enable::All,
-                reqwest::Url::parse(format!("{}/.well-known/jwks", jwt_server.uri()).as_str())
-                    .unwrap(),
-                vec![auth::jwt::Claim {
-                    claim: "extra.email".to_string(),
-                    header: "X-Email".to_string(),
-                }],
-            )]),
-        )])))
-        .await
-        .unwrap(),
+        auth::jwt::Builder::new()
+            .add_app_auth(
+                "app",
+                auth::jwt::config::Auth::new(
+                    reqwest::Url::parse(format!("{}/.well-known/jwks", jwt_server.uri()).as_str())
+                        .unwrap(),
+                    vec![auth::jwt::config::Claim {
+                        claim: "extra.email".to_string(),
+                        header: "X-Email".to_string(),
+                    }],
+                ),
+            )
+            .build(),
     )
-    .build();
+    .build()
+    .await
+    .unwrap();
     let server_thread = tokio::spawn(server.run());
     wait_for_server(ports[1]).await;
     Context {

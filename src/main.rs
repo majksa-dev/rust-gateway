@@ -4,10 +4,11 @@ use essentials::info;
 use gateway::{
     cors,
     http::{response::ResponseBody, HeaderMapExt, Request, Response},
-    rate_limit, time, Middleware, Next, OriginServer, ParamRouter, Result, TcpOrigin,
+    rate_limit, tcp, time, Ctx, Middleware, MiddlewareBuilder, Next, Origin, OriginServer,
+    OriginServerBuilder, ParamRouterBuilder, Result, Service,
 };
 use http::{header, Method, StatusCode};
-use std::{collections::HashMap, env, net::SocketAddr, path::Path};
+use std::{collections::HashMap, env, path::Path};
 use tokio::{
     fs::File,
     io::{self, AsyncReadExt},
@@ -18,12 +19,7 @@ struct Gateway;
 
 #[async_trait]
 impl Middleware for Gateway {
-    async fn run<'n>(
-        &self,
-        _ctx: &gateway::Context,
-        request: Request,
-        next: Next<'n>,
-    ) -> Result<Response> {
+    async fn run<'n>(&self, _ctx: &Ctx, request: Request, next: Next<'n>) -> Result<Response> {
         println!("[gateway] before");
         let mut response = next.run(request).await?;
         println!("[gateway] after");
@@ -32,12 +28,45 @@ impl Middleware for Gateway {
     }
 }
 
-#[derive(Default)]
-pub struct FileServer;
+struct GatewayBuilder;
 
-impl FileServer {
+impl GatewayBuilder {
     pub fn new() -> Self {
         Self
+    }
+}
+
+#[async_trait]
+impl MiddlewareBuilder for GatewayBuilder {
+    async fn build(
+        self: Box<Self>,
+        _: &[String],
+        _: &HashMap<String, Vec<String>>,
+    ) -> Result<Service> {
+        Ok(Box::new(Gateway))
+    }
+}
+
+#[derive(Default)]
+struct FileServer;
+
+#[derive(Default)]
+pub struct FileServerBuilder;
+
+impl FileServerBuilder {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait]
+impl OriginServerBuilder for FileServerBuilder {
+    async fn build(
+        self: Box<Self>,
+        _: &[String],
+        _: &HashMap<String, Vec<String>>,
+    ) -> Result<Origin> {
+        Ok(Box::new(FileServer))
     }
 }
 
@@ -50,7 +79,7 @@ pub struct FileResponse {
 impl OriginServer for FileServer {
     async fn connect(
         &self,
-        _context: &gateway::Context,
+        _ctx: &Ctx,
         request: Request,
         _left_rx: OwnedReadHalf,
         _left_remains: Vec<u8>,
@@ -101,76 +130,83 @@ async fn main() {
     essentials::install();
     info!("Starting gateway");
     tokio::spawn(
-        gateway::builder(FileServer::new(), |_| Some(String::new()))
+        gateway::builder(FileServerBuilder::new(), |_| Some(String::new()))
             .register_peer(
                 String::new(),
-                ParamRouter::new().add_route(Method::GET, "/:file".to_string(), "file".to_string()),
+                ParamRouterBuilder::new().add_route(
+                    Method::GET,
+                    "/:file".to_string(),
+                    "file".to_string(),
+                ),
             )
             .with_app_port(81)
             .with_health_check_port(9001)
             .build()
+            .await
+            .unwrap()
             .run(),
     );
     gateway::builder(
-        TcpOrigin::new(HashMap::from([(
-            String::new(),
-            Box::new("127.0.0.1:81".parse::<SocketAddr>().unwrap()),
-        )])),
+        tcp::Builder::new()
+            .add_peer(
+                "",
+                tcp::config::Connection::new("127.0.0.1:81".parse().unwrap()),
+            )
+            .build(),
         |_| Some(String::new()),
     )
     .register_peer(
         String::new(),
-        ParamRouter::new().add_route(Method::GET, "/:hello".to_string(), "hello".to_string()),
+        ParamRouterBuilder::new().add_route(
+            Method::GET,
+            "/:hello".to_string(),
+            "hello".to_string(),
+        ),
     )
     .register_middleware(
         1,
-        cors::Middleware::new(cors::Config {
-            config: HashMap::from([(
-                "app".to_string(),
-                cors::AppConfig::new(vec![cors::Auth::new(
-                    "token".to_string(),
-                    vec!["http://localhost:3000".to_string()],
-                )]),
-            )]),
-        }),
+        cors::Builder::new()
+            .add_auth(
+                "app",
+                "token".to_string(),
+                vec!["http://localhost:3000".to_string()],
+            )
+            .build(),
     )
     .register_middleware(
         2,
-        rate_limit::Middleware::new(
-            rate_limit::Config {
-                config: HashMap::from([(
-                    "app".to_string(),
-                    rate_limit::AppConfig::new(
-                        rate_limit::Rules {
-                            quota: Some(rate_limit::Quota {
-                                total: time::Frequency {
-                                    amount: 5,
-                                    interval: time::Time {
-                                        amount: 1,
-                                        unit: time::TimeUnit::Minutes,
-                                    },
-                                },
-                                user: Some(time::Frequency {
-                                    amount: 2,
-                                    interval: time::Time {
-                                        amount: 1,
-                                        unit: time::TimeUnit::Minutes,
-                                    },
-                                }),
-                            }),
-                            endpoints: HashMap::new(),
+        rate_limit::Builder::new()
+            .add_app(
+                "app",
+                rate_limit::config::Rules::new(
+                    Some(rate_limit::config::Quota {
+                        total: time::Frequency {
+                            amount: 5,
+                            interval: time::Time {
+                                amount: 1,
+                                unit: time::TimeUnit::Minutes,
+                            },
                         },
-                        HashMap::new(),
-                    ),
-                )]),
-            },
-            rate_limit::InMemoryDatastore::new(),
-        ),
+                        user: Some(time::Frequency {
+                            amount: 2,
+                            interval: time::Time {
+                                amount: 1,
+                                unit: time::TimeUnit::Minutes,
+                            },
+                        }),
+                    }),
+                    HashMap::new(),
+                ),
+                rate_limit::EndpointBuilder::new(),
+            )
+            .build(rate_limit::datastore::InMemoryDatastore::new()),
     )
-    .register_middleware(usize::MAX, Gateway)
+    .register_middleware(usize::MAX, GatewayBuilder)
     .with_host("0.0.0.0".parse().unwrap())
     .with_app_port(80)
     .build()
+    .await
+    .unwrap()
     .run()
     .await;
     info!("Gateway stopped");

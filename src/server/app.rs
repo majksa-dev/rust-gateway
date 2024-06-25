@@ -1,13 +1,15 @@
+use anyhow::Result;
 use essentials::debug;
+use futures::future::join_all;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::gateway::entrypoint::{EntryPoint, EntryPointHandler};
-use crate::gateway::origin::{Origin, OriginServer};
-use crate::gateway::router::{Router, RouterService};
+use crate::gateway::middleware::MiddlewareBuilderService;
+use crate::gateway::router::{RouterBuilder, RouterBuilderService};
 use crate::http::server::Server as HttpServer;
 use crate::http::Request;
-use crate::{Middleware, Service};
-use std::collections::HashMap;
+use crate::{MiddlewareBuilder, OriginBuilder, OriginServerBuilder};
+use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, SocketAddr};
 use std::sync::Arc;
 
@@ -17,17 +19,17 @@ pub(crate) type GenerateKey = dyn (Fn(&Request) -> Option<String>) + Send + Sync
 
 /// A builder for a server.
 pub struct ServerBuilder {
-    origin: Origin,
+    origin: OriginBuilder,
     generate_peer_key: Box<GenerateKey>,
-    peers: HashMap<String, RouterService>,
-    middlewares: HashMap<usize, Service>,
+    peers: HashMap<String, RouterBuilderService>,
+    middlewares: HashMap<usize, MiddlewareBuilderService>,
     host: IpAddr,
     app_port: u16,
     health_check_port: u16,
 }
 
 impl ServerBuilder {
-    fn new(generate_peer_key: Box<GenerateKey>, origin: Origin) -> Self {
+    fn new(generate_peer_key: Box<GenerateKey>, origin: OriginBuilder) -> Self {
         Self {
             origin,
             generate_peer_key,
@@ -40,13 +42,13 @@ impl ServerBuilder {
     }
 
     /// Register a peer with the given key.
-    pub fn register_peer(mut self, key: String, router: impl Router + 'static) -> Self {
+    pub fn register_peer(mut self, key: String, router: impl RouterBuilder + 'static) -> Self {
         self.peers.insert(key, Box::new(router));
         self
     }
 
     /// Register a middleware with the given priority.
-    pub fn register_middleware<M: Middleware + Send + Sync + 'static>(
+    pub fn register_middleware<M: MiddlewareBuilder + Send + Sync + 'static>(
         mut self,
         priority: usize,
         middleware: M,
@@ -78,20 +80,43 @@ impl ServerBuilder {
 
     /// Build the server with the given configuration.
     /// The server will listen on the specified ports and will use the specified health check.
-    pub fn build(self) -> Server {
+    pub async fn build(self) -> Result<Server> {
+        let ids = self.peers.keys().cloned().collect::<Box<[String]>>();
+        let routers = self
+            .peers
+            .into_iter()
+            .map(|(id, router)| (id, router.build()))
+            .collect::<HashMap<_, _>>();
+        let endpoints = routers
+            .iter()
+            .map(|(id, (ids, _))| (id.clone(), ids.clone()))
+            .collect::<HashMap<_, _>>();
+        let peers = routers
+            .into_iter()
+            .map(|(id, (_, router))| (id, router))
+            .collect::<HashMap<_, _>>();
+        let middlewares = join_all(
+            self.middlewares
+                .into_values()
+                .map(|builder| builder.build(&ids, &endpoints)),
+        )
+        .await
+        .into_iter()
+        .collect::<Result<VecDeque<_>>>()?;
         let handler = EntryPointHandler(Arc::new(EntryPoint::new(
-            self.origin,
+            self.origin.build(&ids, &endpoints).await?,
             self.generate_peer_key,
-            self.peers,
-            self.middlewares.into_values().collect(),
+            peers,
+            middlewares,
         )));
-        Server {
+        let server = Server {
             app: HttpServer::new(SocketAddr::new(self.host, self.app_port), handler),
             health_check: HttpServer::new(
                 SocketAddr::new(self.host, self.health_check_port),
                 HealthCheck,
             ),
-        }
+        };
+        Ok(server)
     }
 }
 
@@ -139,7 +164,7 @@ impl Server {
 pub fn builder<F, O>(origin: O, generate_peer_key: F) -> ServerBuilder
 where
     F: Fn(&Request) -> Option<String> + Send + Sync + 'static,
-    O: OriginServer + Send + Sync + 'static,
+    O: OriginServerBuilder + Send + Sync + 'static,
 {
     ServerBuilder::new(Box::new(generate_peer_key), Box::new(origin))
 }

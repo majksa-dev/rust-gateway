@@ -1,4 +1,9 @@
-use super::{middleware::Context, next::Next, origin::Origin, router::RouterService};
+use super::{
+    ctx::{Ctx, Id},
+    next::Next,
+    origin::Origin,
+    router::RouterService,
+};
 use crate::{
     http::{server::Handler, HeaderMapExt, Request, Response, WriteResponse},
     server::app::GenerateKey,
@@ -51,7 +56,7 @@ impl Handler for EntryPointHandler {
 pub struct EntryPoint {
     origin: Origin,
     generate_peer_key: Box<GenerateKey>,
-    peers: HashMap<String, RouterService>,
+    peers: HashMap<String, (Id, RouterService)>,
     middlewares: Middlewares,
 }
 
@@ -68,14 +73,18 @@ impl EntryPoint {
         Self {
             origin,
             generate_peer_key,
-            peers,
+            peers: peers
+                .into_iter()
+                .enumerate()
+                .map(|(id, (k, v))| (k, (id as Id, v)))
+                .collect(),
             middlewares: middlewares.into_iter().map(Arc::new).collect(),
         }
     }
 
     pub async fn next(
         &self,
-        context: &Context,
+        context: &Ctx,
         request: Request,
         left_rx: OwnedReadHalf,
         left_remains: Vec<u8>,
@@ -158,7 +167,7 @@ impl EntryPoint {
             }
         };
         debug!("App ID: {}", app_id);
-        let app = match self.peers.get(&app_id) {
+        let (app_id, app) = match self.peers.get(&app_id) {
             Some(app) => app,
             None => {
                 warn!("App ID could not be matched to an app");
@@ -166,15 +175,15 @@ impl EntryPoint {
             }
         };
         let endpoint_id = match app.matches(&request) {
-            Some(endpoint_id) => endpoint_id.clone(),
+            Some(endpoint_id) => endpoint_id,
             None => {
                 warn!("Request could not be matched to an endpoint ID");
                 return Ok(Response::new(StatusCode::FORBIDDEN));
             }
         };
         debug!("Endpoint ID: {}", endpoint_id);
-        let context = Context {
-            app_id,
+        let context = Ctx {
+            app_id: *app_id,
             endpoint_id,
         };
         debug!("Context: {:?}", context);

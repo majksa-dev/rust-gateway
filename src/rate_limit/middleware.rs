@@ -1,18 +1,15 @@
-use super::{config, datastore, Datastore};
+use super::{datastore, Datastore};
 use crate::{
-    gateway::{
-        middleware::{Context, Middleware as TMiddleware},
-        next::Next,
-        Result,
-    },
+    gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
     http::{HeaderMapExt, Request, Response},
+    Ctx,
 };
 use async_trait::async_trait;
 use essentials::warn;
 use http::{header, StatusCode};
 
 pub struct Middleware {
-    config: config::Config,
+    ctx: super::Context,
     datastore: Box<dyn Datastore + Sync + 'static>,
 }
 
@@ -20,11 +17,8 @@ unsafe impl Send for Middleware {}
 unsafe impl Sync for Middleware {}
 
 impl Middleware {
-    pub fn new(config: config::Config, datastore: impl Datastore + Sync + 'static) -> Self {
-        Self {
-            config,
-            datastore: Box::new(datastore),
-        }
+    pub(crate) fn new(ctx: super::Context, datastore: Box<dyn Datastore + Sync + 'static>) -> Self {
+        Self { ctx, datastore }
     }
 
     fn too_many_requests(reset: usize) -> Response {
@@ -39,7 +33,7 @@ impl Middleware {
 
 #[async_trait]
 impl TMiddleware for Middleware {
-    async fn run<'n>(&self, ctx: &Context, request: Request, next: Next<'n>) -> Result<Response> {
+    async fn run<'n>(&self, ctx: &Ctx, request: Request, next: Next<'n>) -> Result<Response> {
         let ip = match request
             .header("X-Real-IP")
             .and_then(|header| header.to_str().ok())
@@ -58,19 +52,18 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
         };
-        let config = match self.config.config.get(&ctx.app_id) {
+        let config = match self.ctx.get(ctx.app_id) {
             Some(config) => config,
             None => {
                 warn!("No config found for app: {}", ctx.app_id);
                 return Ok(Response::new(StatusCode::BAD_GATEWAY));
             }
         };
-        let rules = config.auth.get(&token).unwrap_or(&config.root);
-        let quota = match rules
-            .endpoints
-            .get(&ctx.endpoint_id)
-            .or(rules.quota.as_ref())
-        {
+        let quota = config
+            .get(ctx.endpoint_id)
+            .and_then(|rules| rules.find_quota(&token))
+            .or_else(|| config.global().find_quota(&token));
+        let quota = match quota {
             Some(quota) => quota,
             None => {
                 warn!("No quota found for endpoint: {}", ctx.endpoint_id);

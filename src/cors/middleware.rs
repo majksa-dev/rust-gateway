@@ -1,29 +1,23 @@
-use super::config;
 use crate::{
-    gateway::{
-        middleware::{Context, Middleware as TMiddleware},
-        next::Next,
-        Result,
-    },
+    gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
     http::{HeaderMapExt, Request, Response},
+    Ctx,
 };
 use async_trait::async_trait;
 use http::{header, StatusCode};
 
 #[derive(Debug)]
-pub struct Middleware {
-    config: config::Config,
-}
+pub struct Middleware(super::Context);
 
 impl Middleware {
-    pub fn new(config: config::Config) -> Self {
-        Self { config }
+    pub(crate) fn new(ctx: super::Context) -> Self {
+        Self(ctx)
     }
 }
 
 #[async_trait]
 impl TMiddleware for Middleware {
-    async fn run<'n>(&self, ctx: &Context, request: Request, next: Next<'n>) -> Result<Response> {
+    async fn run<'n>(&self, ctx: &Ctx, request: Request, next: Next<'n>) -> Result<Response> {
         let origin = match request
             .header(header::ORIGIN)
             .and_then(|header| header.to_str().ok())
@@ -40,12 +34,13 @@ impl TMiddleware for Middleware {
             return Ok(response);
         }
         let method = request.method.clone();
-        let config = match self.config.config.get(&ctx.app_id) {
+        let config = match self.0.get(ctx.app_id) {
             Some(config) => config,
             None => {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
-        };
+        }
+        .global();
         let token = match request
             .header("X-Api-Token")
             .and_then(|header| header.to_str().ok())

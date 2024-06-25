@@ -1,11 +1,10 @@
 use gateway::cors;
 use gateway::http::HeaderMapExt;
-use gateway::ParamRouter;
-use gateway::TcpOrigin;
+use gateway::tcp;
+use gateway::ParamRouterBuilder;
 use http::header;
 use http::Method;
 use pretty_assertions::assert_eq;
-use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use testing_utils::macros as utils;
@@ -29,7 +28,7 @@ async fn before_each() -> Context {
         essentials::install();
     }
     let listener = std::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).unwrap();
-    let origin = listener.local_addr().unwrap().port();
+    let mock_addr = listener.local_addr().unwrap();
     let mock_server = MockServer::builder().listener(listener).start().await;
     Mock::given(method("GET"))
         .and(path("/hello"))
@@ -38,10 +37,9 @@ async fn before_each() -> Context {
         .await;
     let ports = testing_utils::get_random_ports(2);
     let server = gateway::builder(
-        TcpOrigin::new(HashMap::from([(
-            "app".to_string(),
-            Box::new(SocketAddr::from(([127, 0, 0, 1], origin))),
-        )])),
+        tcp::Builder::new()
+            .add_peer("app", tcp::config::Connection::new(mock_addr))
+            .build(),
         |request| {
             request
                 .header(header::HOST)
@@ -53,19 +51,21 @@ async fn before_each() -> Context {
     .with_health_check_port(ports[1])
     .register_peer(
         "app".to_string(),
-        ParamRouter::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
+        ParamRouterBuilder::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
     )
     .register_middleware(
         1,
-        cors::Middleware::new(cors::Config::new(HashMap::from([(
-            "app".to_string(),
-            cors::AppConfig::new(vec![cors::Auth::new(
+        cors::Builder::new()
+            .add_auth(
+                "app",
                 "token".to_string(),
                 vec!["http://localhost:3000".to_string()],
-            )]),
-        )]))),
+            )
+            .build(),
     )
-    .build();
+    .build()
+    .await
+    .unwrap();
     let server_thread = tokio::spawn(server.run());
     wait_for_server(ports[1]).await;
     Context {

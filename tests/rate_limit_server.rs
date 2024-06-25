@@ -1,10 +1,6 @@
 use bb8_redis::{bb8, RedisConnectionManager};
 use essentials::{debug, info};
-use gateway::{
-    http::HeaderMapExt,
-    rate_limit::{self, RedisDatastore},
-    time, ParamRouter, TcpOrigin,
-};
+use gateway::{http::HeaderMapExt, rate_limit, tcp, time, ParamRouterBuilder};
 use http::{header, Method};
 use pretty_assertions::assert_eq;
 use std::collections::HashMap;
@@ -40,7 +36,7 @@ async fn before_each() -> Context {
         essentials::install();
     }
     let listener = std::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).unwrap();
-    let origin = listener.local_addr().unwrap().port();
+    let mock_addr = listener.local_addr().unwrap();
     let mock_server = MockServer::builder().listener(listener).start().await;
     Mock::given(method("GET"))
         .and(path("/hello"))
@@ -59,10 +55,9 @@ async fn before_each() -> Context {
     let redis_pool = bb8::Pool::builder().build(redis_manager).await.unwrap();
     let ports = testing_utils::get_random_ports(2);
     let server = gateway::builder(
-        TcpOrigin::new(HashMap::from([(
-            "app".to_string(),
-            Box::new(SocketAddr::from(([127, 0, 0, 1], origin))),
-        )])),
+        tcp::Builder::new()
+            .add_peer("app", tcp::config::Connection::new(mock_addr))
+            .build(),
         |request| {
             request
                 .header(header::HOST)
@@ -74,40 +69,39 @@ async fn before_each() -> Context {
     .with_health_check_port(ports[1])
     .register_peer(
         "app".to_string(),
-        ParamRouter::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
+        ParamRouterBuilder::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
     )
     .register_middleware(
         1,
-        rate_limit::Middleware::new(
-            rate_limit::Config::new(HashMap::from([(
-                "app".to_string(),
-                rate_limit::AppConfig::new(
-                    rate_limit::Rules {
-                        quota: Some(rate_limit::Quota {
-                            total: time::Frequency {
-                                amount: 5,
-                                interval: time::Time {
-                                    amount: 1,
-                                    unit: time::TimeUnit::Minutes,
-                                },
+        rate_limit::Builder::new()
+            .add_app(
+                "app",
+                rate_limit::config::Rules {
+                    root: Some(rate_limit::config::Quota {
+                        total: time::Frequency {
+                            amount: 5,
+                            interval: time::Time {
+                                amount: 1,
+                                unit: time::TimeUnit::Minutes,
                             },
-                            user: Some(time::Frequency {
-                                amount: 2,
-                                interval: time::Time {
-                                    amount: 1,
-                                    unit: time::TimeUnit::Minutes,
-                                },
-                            }),
+                        },
+                        user: Some(time::Frequency {
+                            amount: 2,
+                            interval: time::Time {
+                                amount: 1,
+                                unit: time::TimeUnit::Minutes,
+                            },
                         }),
-                        endpoints: HashMap::new(),
-                    },
-                    HashMap::new(),
-                ),
-            )])),
-            RedisDatastore::new(redis_pool),
-        ),
+                    }),
+                    tokens: HashMap::new(),
+                },
+                rate_limit::EndpointBuilder::new(),
+            )
+            .build(rate_limit::datastore::RedisDatastore::new(redis_pool)),
     )
-    .build();
+    .build()
+    .await
+    .unwrap();
     let server_thread = tokio::spawn(server.run());
     wait_for_server(ports[1]).await;
     Context {

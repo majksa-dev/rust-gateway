@@ -1,72 +1,35 @@
-use super::OriginServer;
+use super::response::OriginResponse;
 use crate::{
-    http::{response::ResponseBody, ReadResponse, Request, Response, WriteRequest},
-    Result,
+    http::{ReadResponse, Request, Response},
+    Ctx, OriginServer, Result, WriteRequest,
 };
 use anyhow::Context;
 use async_trait::async_trait;
 use essentials::debug;
 use http::StatusCode;
-use std::{collections::HashMap, net::SocketAddr};
 use tokio::{
-    io::{self, AsyncReadExt, AsyncWriteExt, BufReader},
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream,
-    },
+    io::{AsyncWriteExt, BufReader},
+    net::{tcp::OwnedReadHalf, TcpStream},
 };
 
-pub struct TcpOrigin(HashMap<String, Box<SocketAddr>>);
-
-impl TcpOrigin {
-    pub fn new(config: HashMap<String, Box<SocketAddr>>) -> Self {
-        Self(config)
-    }
-}
-
-#[derive(Debug)]
-pub struct OriginResponse {
-    remains: Vec<u8>,
-    reader: OwnedReadHalf,
-}
+pub struct Origin(pub super::Context);
 
 #[async_trait]
-impl ResponseBody for OriginResponse {
-    async fn read_all(mut self: Box<Self>, len: usize) -> io::Result<String> {
-        let mut buf = String::with_capacity(len);
-        let remains_len = self.remains.len();
-        buf.push_str(String::from_utf8(self.remains).unwrap().as_str());
-        unsafe {
-            self.reader
-                .read_exact(&mut buf.as_bytes_mut()[remains_len..])
-                .await?
-        };
-        Ok(buf)
-    }
-
-    async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()> {
-        writer.write_all(self.remains.as_slice()).await?;
-        ::io::copy_tcp(&mut self.reader, writer).await?;
-        Ok(())
-    }
-}
-
-#[async_trait]
-impl OriginServer for TcpOrigin {
+impl OriginServer for Origin {
     async fn connect(
         &self,
-        context: &crate::Context,
+        context: &Ctx,
         request: Request,
         mut left_rx: OwnedReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<Response> {
-        let addr = match self.0.get(&context.app_id) {
-            Some(addr) => addr.to_string(),
+        let addr = match self.0.get(context.app_id) {
+            Some(addr) => addr.global().clone(),
             None => {
                 return Ok(Response::new(StatusCode::NOT_FOUND));
             }
         };
-        let right = TcpStream::connect(addr)
+        let right = TcpStream::connect(*addr)
             .await
             .with_context(|| "Failed to connect to origin".to_string())?;
         let (mut right_rx, mut right_tx) = right.into_split();
