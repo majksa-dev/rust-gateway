@@ -31,9 +31,11 @@ impl Auth {
     }
 
     pub fn is_origin_allowed(&self, origin: impl AsRef<str>) -> bool {
-        self.origins
-            .iter()
-            .any(|allowed_origin| allowed_origin == origin.as_ref())
+        self.origins.len() == 0
+            || self
+                .origins
+                .iter()
+                .any(|allowed_origin| allowed_origin == origin.as_ref())
     }
 }
 
