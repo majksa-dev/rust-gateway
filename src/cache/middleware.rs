@@ -1,8 +1,9 @@
-use super::{config, datastore, response::CachedResponseBody, Datastore};
+use super::{datastore, response::CachedResponseBody, Datastore};
 use crate::{
     gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
     http::{HeaderMapExt, Request, Response},
     time::TimeUnit,
+    Ctx,
 };
 use anyhow::Context;
 use async_trait::async_trait;
@@ -14,7 +15,7 @@ use pingora_cache::{
 };
 
 pub struct Middleware {
-    config: config::Config,
+    ctx: super::Context,
     datastore: Box<dyn Datastore + Sync + 'static>,
 }
 
@@ -22,30 +23,22 @@ unsafe impl Send for Middleware {}
 unsafe impl Sync for Middleware {}
 
 impl Middleware {
-    pub fn new(config: config::Config, datastore: impl Datastore + Sync + 'static) -> Self {
-        Self {
-            config,
-            datastore: Box::new(datastore),
-        }
+    pub(crate) fn new(ctx: super::Context, datastore: Box<dyn Datastore + Sync + 'static>) -> Self {
+        Self { ctx, datastore }
     }
 }
 
 #[async_trait]
 impl TMiddleware for Middleware {
-    async fn run<'n>(
-        &self,
-        ctx: &crate::Context,
-        mut request: Request,
-        next: Next<'n>,
-    ) -> Result<Response> {
-        let config = match self.config.config.get(&ctx.app_id) {
+    async fn run<'n>(&self, ctx: &Ctx, mut request: Request, next: Next<'n>) -> Result<Response> {
+        let app = match self.ctx.get(ctx.app_id) {
             Some(config) => config,
             None => {
                 warn!("No config found for app: {}", ctx.app_id);
                 return Ok(Response::new(StatusCode::BAD_GATEWAY));
             }
         };
-        let endpoint = match config.endpoints.get(&ctx.endpoint_id) {
+        let endpoint = match app.get(ctx.endpoint_id) {
             Some(quota) => quota,
             None => {
                 warn!("Cache not configured for endpoint: {}", ctx.endpoint_id);

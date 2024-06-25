@@ -1,7 +1,7 @@
-use super::config;
 use crate::{
     gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
     http::{HeaderMapExt, Request, Response},
+    Ctx,
 };
 use anyhow::{anyhow, bail, Context};
 use async_trait::async_trait;
@@ -10,24 +10,17 @@ use essentials::warn;
 use http::{header, StatusCode};
 
 #[derive(Debug)]
-pub struct Middleware {
-    config: config::Config,
-}
+pub struct Middleware(super::Context);
 
 impl Middleware {
-    pub fn new(config: config::Config) -> Self {
-        Self { config }
+    pub(crate) fn new(ctx: super::Context) -> Self {
+        Self(ctx)
     }
 }
 
 #[async_trait]
 impl TMiddleware for Middleware {
-    async fn run<'n>(
-        &self,
-        ctx: &crate::Context,
-        mut request: Request,
-        next: Next<'n>,
-    ) -> Result<Response> {
+    async fn run<'n>(&self, ctx: &Ctx, mut request: Request, next: Next<'n>) -> Result<Response> {
         let authorization = match request
             .header(header::AUTHORIZATION)
             .and_then(|header| header.to_str().ok())
@@ -62,13 +55,14 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
         };
-        let config = match self.config.config.get(&ctx.app_id) {
+        let config = match self.0.get(ctx.app_id) {
             Some(config) => config,
             None => {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
-        };
-        if !config.authenticate(&username, &password, &ctx.endpoint_id) {
+        }
+        .global();
+        if !config.authenticate(&username, &password) {
             return Ok(Response::new(StatusCode::FORBIDDEN));
         }
         request.remove_header(header::AUTHORIZATION);

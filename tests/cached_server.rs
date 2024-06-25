@@ -1,9 +1,8 @@
 use bb8_redis::{bb8, RedisConnectionManager};
 use essentials::debug;
-use gateway::{cache, http::HeaderMapExt, time, ParamRouter, TcpOrigin};
+use gateway::{cache, http::HeaderMapExt, tcp, time, ParamRouterBuilder};
 use http::{header, Method};
 use pretty_assertions::assert_eq;
-use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use testing_utils::{
@@ -36,7 +35,7 @@ async fn before_each() -> Context {
         essentials::install();
     }
     let listener = std::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).unwrap();
-    let origin = listener.local_addr().unwrap().port();
+    let mock_addr = listener.local_addr().unwrap();
     let mock_server = MockServer::builder().listener(listener).start().await;
     Mock::given(method("GET"))
         .and(path("/hello"))
@@ -59,10 +58,9 @@ async fn before_each() -> Context {
     let redis_pool = bb8::Pool::builder().build(redis_manager).await.unwrap();
     let ports = testing_utils::get_random_ports(2);
     let server = gateway::builder(
-        TcpOrigin::new(HashMap::from([(
-            "app".to_string(),
-            Box::new(SocketAddr::from(([127, 0, 0, 1], origin))),
-        )])),
+        tcp::Builder::new()
+            .add_peer("app", tcp::config::Connection::new(mock_addr))
+            .build(),
         |request| {
             request
                 .header(header::HOST)
@@ -74,28 +72,27 @@ async fn before_each() -> Context {
     .with_health_check_port(ports[1])
     .register_peer(
         "app".to_string(),
-        ParamRouter::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
+        ParamRouterBuilder::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
     )
     .register_middleware(
         1,
-        cache::Middleware::new(
-            cache::Config::new(HashMap::from([(
-                "app".to_string(),
-                cache::AppConfig::new(HashMap::from([(
-                    "hello".to_string(),
-                    cache::Endpoint::new(
-                        time::Time {
-                            amount: 1,
-                            unit: time::TimeUnit::Seconds,
-                        },
-                        vec!["X-Username".to_string()],
-                    ),
-                )])),
-            )])),
-            cache::RedisDatastore::new(redis_pool),
-        ),
+        cache::Builder::new()
+            .add_endpoint(
+                "app",
+                "hello",
+                cache::config::Endpoint::new(
+                    time::Time {
+                        amount: 1,
+                        unit: time::TimeUnit::Seconds,
+                    },
+                    vec!["X-Username".to_string()],
+                ),
+            )
+            .build(cache::datastore::RedisDatastore::new(redis_pool)),
     )
-    .build();
+    .build()
+    .await
+    .unwrap();
     let server_thread = tokio::spawn(server.run());
     wait_for_server(ports[1]).await;
     Context {

@@ -1,8 +1,7 @@
 use essentials::debug;
-use gateway::{auth, http::HeaderMapExt, ParamRouter, TcpOrigin};
+use gateway::{auth, http::HeaderMapExt, tcp, ParamRouterBuilder};
 use http::{header, Method};
 use pretty_assertions::assert_eq;
-use std::collections::HashMap;
 use std::env;
 use std::net::SocketAddr;
 use testing_utils::{
@@ -29,7 +28,7 @@ async fn before_each() -> Context {
         essentials::install();
     }
     let listener = std::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).unwrap();
-    let origin = listener.local_addr().unwrap().port();
+    let mock_addr = listener.local_addr().unwrap();
     let mock_server = MockServer::builder().listener(listener).start().await;
     Mock::given(method("GET"))
         .and(path("/hello"))
@@ -38,10 +37,9 @@ async fn before_each() -> Context {
         .await;
     let ports = testing_utils::get_random_ports(2);
     let server = gateway::builder(
-        TcpOrigin::new(HashMap::from([(
-            "app".to_string(),
-            Box::new(SocketAddr::from(([127, 0, 0, 1], origin))),
-        )])),
+        tcp::Builder::new()
+            .add_peer("app", tcp::config::Connection::new(mock_addr))
+            .build(),
         |request| {
             request
                 .header(header::HOST)
@@ -53,22 +51,23 @@ async fn before_each() -> Context {
     .with_health_check_port(ports[1])
     .register_peer(
         "app".to_string(),
-        ParamRouter::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
+        ParamRouterBuilder::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
     )
     .register_middleware(
         1,
-        auth::basic::Middleware::new(auth::basic::Config::new(HashMap::from([(
-            "app".to_string(),
-            auth::basic::AppConfig::new(vec![auth::basic::Auth::new(
-                auth::Enable::All,
-                vec![auth::basic::Credential {
+        auth::basic::Builder::new()
+            .add_app_credential(
+                "app",
+                auth::basic::config::Credential {
                     username: "username".to_string(),
                     password: "password".to_string(),
-                }],
-            )]),
-        )]))),
+                },
+            )
+            .build(),
     )
-    .build();
+    .build()
+    .await
+    .unwrap();
     let server_thread = tokio::spawn(server.run());
     wait_for_server(ports[1]).await;
     Context {
