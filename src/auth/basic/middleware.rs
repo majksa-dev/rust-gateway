@@ -66,7 +66,7 @@ impl TMiddleware for Middleware {
             return Ok(Response::new(StatusCode::FORBIDDEN));
         }
         request.remove_header(header::AUTHORIZATION);
-        request.insert_header(headers::USERNAME, username);
+        request.insert_header(&headers::USERNAME, username);
         next.run(request).await
     }
 }
