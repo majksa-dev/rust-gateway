@@ -8,5 +8,7 @@ on:
 jobs:
   rust:
     uses: majksa-actions/workflows/.github/workflows/rust-test.yml@v1
+    with:
+      features: '["","auth","cors","rate-limit","cache"]'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

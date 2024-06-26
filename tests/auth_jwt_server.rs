@@ -1,6 +1,6 @@
 use chrono::{Duration, Utc};
 use essentials::debug;
-use gateway::{auth, http::HeaderMapExt, tcp, ParamRouterBuilder};
+use gateway::{http::HeaderMapExt, tcp, ParamRouterBuilder};
 use http::{header, Method};
 use jsonwebtoken::{Algorithm, EncodingKey, Header};
 use pretty_assertions::assert_eq;
@@ -16,6 +16,75 @@ use wiremock::{
     matchers::{method, path},
     Mock, MockServer, Request, Respond, ResponseTemplate,
 };
+
+#[utils::test(setup = before_each, teardown = after_each)]
+#[cfg_attr(not(feature = "auth"), ignore)]
+async fn should_return_email1(ctx: Context) {
+    let token = ctx.encoding_key.generate_token(json!({
+        "sub": "1234567890",
+        "name": "John Doe",
+        "admin": true,
+        "extra": {
+            "email": "john@doe.com"
+        }
+    }));
+    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+        .header("Host", "app")
+        .header("Authorization", format!("Bearer {token}"))
+        .await;
+    debug!("{:?}", response);
+    let mut response = response.unwrap();
+    let status = response.status();
+    assert_eq!(status, StatusCode::Ok);
+    assert_eq!(response.body_string().await.unwrap(), "john@doe.com");
+}
+
+#[utils::test(setup = before_each, teardown = after_each)]
+#[cfg_attr(not(feature = "auth"), ignore)]
+async fn should_return_email2(ctx: Context) {
+    let token = ctx.encoding_key.generate_token(json!({
+        "sub": "1234567890",
+        "name": "John Doe",
+        "admin": true,
+        "extra": {
+            "email": "john2@doe.com"
+        }
+    }));
+    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+        .header("Host", "app")
+        .header("Authorization", format!("Bearer {token}"))
+        .await;
+    debug!("{:?}", response);
+    let mut response = response.unwrap();
+    let status = response.status();
+    assert_eq!(status, StatusCode::Ok);
+    assert_eq!(response.body_string().await.unwrap(), "john2@doe.com");
+}
+
+#[utils::test(setup = before_each, teardown = after_each)]
+#[cfg_attr(not(feature = "auth"), ignore)]
+async fn should_return_401_when_no_auth_header_is_attached(ctx: Context) {
+    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+        .header("Host", "app")
+        .await;
+    debug!("{:?}", response);
+    let response = response.unwrap();
+    let status = response.status();
+    assert_eq!(status, StatusCode::Unauthorized);
+}
+
+#[utils::test(setup = before_each, teardown = after_each)]
+#[cfg_attr(not(feature = "auth"), ignore)]
+async fn should_return_403_when_invalid_token_is_used(ctx: Context) {
+    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+        .header("Host", "app")
+        .header("Authorization", "Basic eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c")
+        .await;
+    debug!("{:?}", response);
+    let response = response.unwrap();
+    let status = response.status();
+    assert_eq!(status, StatusCode::Unauthorized);
+}
 
 struct Context {
     app: u16,
@@ -73,8 +142,9 @@ async fn before_each() -> Context {
             .await;
         (server, encoding_key)
     };
+    debug!("Jwt server started at: {:?}", jwt_server.uri());
     let ports = testing_utils::get_random_ports(2);
-    let server = gateway::builder(
+    let mut server_builder = gateway::builder(
         tcp::Builder::new()
             .add_peer("app", tcp::config::Connection::new(mock_addr))
             .build(),
@@ -86,30 +156,34 @@ async fn before_each() -> Context {
         },
     )
     .with_app_port(ports[0])
-    .with_health_check_port(ports[1])
-    .register_peer(
+    .with_health_check_port(ports[1]);
+    server_builder = server_builder.register_peer(
         "app".to_string(),
         ParamRouterBuilder::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
-    )
-    .register_middleware(
-        1,
-        auth::jwt::Builder::new()
-            .add_app_auth(
-                "app",
-                auth::jwt::config::Auth::new(
-                    reqwest::Url::parse(format!("{}/.well-known/jwks", jwt_server.uri()).as_str())
+    );
+    #[cfg(feature = "auth")]
+    {
+        use gateway::auth;
+        server_builder = server_builder.register_middleware(
+            1,
+            auth::jwt::Builder::new()
+                .add_app_auth(
+                    "app",
+                    auth::jwt::config::Auth::new(
+                        reqwest::Url::parse(
+                            format!("{}/.well-known/jwks", jwt_server.uri()).as_str(),
+                        )
                         .unwrap(),
-                    vec![auth::jwt::config::Claim {
-                        claim: "extra.email".to_string(),
-                        header: "X-Email".to_string(),
-                    }],
-                ),
-            )
-            .build(),
-    )
-    .build()
-    .await
-    .unwrap();
+                        vec![auth::jwt::config::Claim {
+                            claim: "extra.email".to_string(),
+                            header: "X-Email".to_string(),
+                        }],
+                    ),
+                )
+                .build(),
+        );
+    }
+    let server = server_builder.build().await.unwrap();
     let server_thread = tokio::spawn(server.run());
     wait_for_server(ports[1]).await;
     Context {
@@ -161,71 +235,6 @@ impl GenerateToken for EncodingKey {
             .insert("nbf".to_string(), in_1_day.timestamp().into());
         jsonwebtoken::encode(&header, &claims, self).unwrap()
     }
-}
-
-#[utils::test(setup = before_each, teardown = after_each)]
-async fn should_return_email1(ctx: Context) {
-    let token = ctx.encoding_key.generate_token(json!({
-        "sub": "1234567890",
-        "name": "John Doe",
-        "admin": true,
-        "extra": {
-            "email": "john@doe.com"
-        }
-    }));
-    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("Host", "app")
-        .header("Authorization", format!("Bearer {token}"))
-        .await;
-    debug!("{:?}", response);
-    let mut response = response.unwrap();
-    let status = response.status();
-    assert_eq!(status, StatusCode::Ok);
-    assert_eq!(response.body_string().await.unwrap(), "john@doe.com");
-}
-
-#[utils::test(setup = before_each, teardown = after_each)]
-async fn should_return_email2(ctx: Context) {
-    let token = ctx.encoding_key.generate_token(json!({
-        "sub": "1234567890",
-        "name": "John Doe",
-        "admin": true,
-        "extra": {
-            "email": "john2@doe.com"
-        }
-    }));
-    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("Host", "app")
-        .header("Authorization", format!("Bearer {token}"))
-        .await;
-    debug!("{:?}", response);
-    let mut response = response.unwrap();
-    let status = response.status();
-    assert_eq!(status, StatusCode::Ok);
-    assert_eq!(response.body_string().await.unwrap(), "john2@doe.com");
-}
-
-#[utils::test(setup = before_each, teardown = after_each)]
-async fn should_return_401_when_no_auth_header_is_attached(ctx: Context) {
-    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("Host", "app")
-        .await;
-    debug!("{:?}", response);
-    let response = response.unwrap();
-    let status = response.status();
-    assert_eq!(status, StatusCode::Unauthorized);
-}
-
-#[utils::test(setup = before_each, teardown = after_each)]
-async fn should_return_403_when_invalid_token_is_used(ctx: Context) {
-    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("Host", "app")
-        .header("Authorization", "Basic eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c")
-        .await;
-    debug!("{:?}", response);
-    let response = response.unwrap();
-    let status = response.status();
-    assert_eq!(status, StatusCode::Unauthorized);
 }
 
 const PRIVATE_KEY: &str = r#"-----BEGIN PRIVATE KEY-----

@@ -1,5 +1,5 @@
 use essentials::debug;
-use gateway::{auth, http::HeaderMapExt, tcp, ParamRouterBuilder};
+use gateway::{http::HeaderMapExt, tcp, ParamRouterBuilder};
 use http::{header, Method};
 use pretty_assertions::assert_eq;
 use std::env;
@@ -13,6 +13,45 @@ use wiremock::{
     matchers::{method, path},
     Mock, MockServer, ResponseTemplate,
 };
+
+#[utils::test(setup = before_each, teardown = after_each)]
+#[cfg_attr(not(feature = "auth"), ignore)]
+async fn should_succeed(ctx: Context) {
+    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+        .header("Host", "app")
+        .header("Authorization", "Basic dXNlcm5hbWU6cGFzc3dvcmQ=") // username:password
+        .await;
+    debug!("{:?}", response);
+    let mut response = response.unwrap();
+    let status = response.status();
+    assert_eq!(status, StatusCode::Ok);
+    assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
+}
+
+#[cfg_attr(not(feature = "auth"), ignore)]
+#[utils::test(setup = before_each, teardown = after_each)]
+async fn should_return_401_when_no_auth_header_is_attached(ctx: Context) {
+    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+        .header("Host", "app")
+        .await;
+    debug!("{:?}", response);
+    let response = response.unwrap();
+    let status = response.status();
+    assert_eq!(status, StatusCode::Unauthorized);
+}
+
+#[cfg_attr(not(feature = "auth"), ignore)]
+#[utils::test(setup = before_each, teardown = after_each)]
+async fn should_return_403_when_password_does_not_match(ctx: Context) {
+    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+        .header("Host", "app")
+        .header("Authorization", "Basic dXNlcm5hbWU6aW52YWxpZA==") // username:invalid
+        .await;
+    debug!("{:?}", response);
+    let response = response.unwrap();
+    let status = response.status();
+    assert_eq!(status, StatusCode::Forbidden);
+}
 
 struct Context {
     app: u16,
@@ -36,7 +75,7 @@ async fn before_each() -> Context {
         .mount(&mock_server)
         .await;
     let ports = testing_utils::get_random_ports(2);
-    let server = gateway::builder(
+    let mut server_builder = gateway::builder(
         tcp::Builder::new()
             .add_peer("app", tcp::config::Connection::new(mock_addr))
             .build(),
@@ -48,26 +87,28 @@ async fn before_each() -> Context {
         },
     )
     .with_app_port(ports[0])
-    .with_health_check_port(ports[1])
-    .register_peer(
+    .with_health_check_port(ports[1]);
+    server_builder = server_builder.register_peer(
         "app".to_string(),
         ParamRouterBuilder::new().add_route(Method::GET, "/hello".to_string(), "hello".to_string()),
-    )
-    .register_middleware(
-        1,
-        auth::basic::Builder::new()
-            .add_app_credential(
-                "app",
-                auth::basic::config::Credential {
-                    username: "username".to_string(),
-                    password: "password".to_string(),
-                },
-            )
-            .build(),
-    )
-    .build()
-    .await
-    .unwrap();
+    );
+    #[cfg(feature = "auth")]
+    {
+        use gateway::auth;
+        server_builder = server_builder.register_middleware(
+            1,
+            auth::basic::Builder::new()
+                .add_app_credential(
+                    "app",
+                    auth::basic::config::Credential {
+                        username: "username".to_string(),
+                        password: "password".to_string(),
+                    },
+                )
+                .build(),
+        );
+    }
+    let server = server_builder.build().await.unwrap();
     let server_thread = tokio::spawn(server.run());
     wait_for_server(ports[1]).await;
     Context {
@@ -89,40 +130,4 @@ async fn wait_for_server(health_check: u16) {
         }
         interval.tick().await;
     }
-}
-
-#[utils::test(setup = before_each, teardown = after_each)]
-async fn should_succeed(ctx: Context) {
-    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("Host", "app")
-        .header("Authorization", "Basic dXNlcm5hbWU6cGFzc3dvcmQ=") // username:password
-        .await;
-    debug!("{:?}", response);
-    let mut response = response.unwrap();
-    let status = response.status();
-    assert_eq!(status, StatusCode::Ok);
-    assert_eq!(response.body_string().await.unwrap(), "Hello, world!");
-}
-
-#[utils::test(setup = before_each, teardown = after_each)]
-async fn should_return_401_when_no_auth_header_is_attached(ctx: Context) {
-    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("Host", "app")
-        .await;
-    debug!("{:?}", response);
-    let response = response.unwrap();
-    let status = response.status();
-    assert_eq!(status, StatusCode::Unauthorized);
-}
-
-#[utils::test(setup = before_each, teardown = after_each)]
-async fn should_return_403_when_password_does_not_match(ctx: Context) {
-    let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
-        .header("Host", "app")
-        .header("Authorization", "Basic dXNlcm5hbWU6aW52YWxpZA==") // username:invalid
-        .await;
-    debug!("{:?}", response);
-    let response = response.unwrap();
-    let status = response.status();
-    assert_eq!(status, StatusCode::Forbidden);
 }

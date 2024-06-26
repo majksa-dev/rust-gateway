@@ -7,9 +7,8 @@
 //! use async_trait::async_trait;
 //! use essentials::info;
 //! use gateway::{
-//!     cors,
 //!     http::{response::ResponseBody, HeaderMapExt, Request, Response},
-//!     rate_limit, tcp, time, Ctx, Middleware, MiddlewareBuilder, Next, Origin, OriginServer,
+//!     tcp, time, Ctx, Middleware, MiddlewareBuilder, Next, Origin, OriginServer,
 //!     OriginServerBuilder, ParamRouterBuilder, Result, Service,
 //! };
 //! use http::{header, Method, StatusCode};
@@ -151,7 +150,7 @@
 //!             .unwrap()
 //!             .run(),
 //!     );
-//!     gateway::builder(
+//!     let mut server_builder = gateway::builder(
 //!         tcp::Builder::new()
 //!             .add_peer(
 //!                 "",
@@ -159,61 +158,70 @@
 //!             )
 //!             .build(),
 //!         |_| Some(String::new()),
-//!     )
-//!     .register_peer(
+//!     );
+//!     server_builder = server_builder.register_peer(
 //!         String::new(),
 //!         ParamRouterBuilder::new().add_route(
 //!             Method::GET,
 //!             "/:hello".to_string(),
 //!             "hello".to_string(),
 //!         ),
-//!     )
-//!     .register_middleware(
-//!         1,
-//!         cors::Builder::new()
-//!             .add_auth(
-//!                 "app",
-//!                 "token".to_string(),
-//!                 vec!["http://localhost:3000".to_string()],
-//!             )
-//!             .build(),
-//!     )
-//!     .register_middleware(
-//!         2,
-//!         rate_limit::Builder::new()
-//!             .add_app(
-//!                 "app",
-//!                 rate_limit::config::Rules::new(
-//!                     Some(rate_limit::config::Quota {
-//!                         total: time::Frequency {
-//!                             amount: 5,
-//!                             interval: time::Time {
-//!                                 amount: 1,
-//!                                 unit: time::TimeUnit::Minutes,
+//!     );
+//!     #[cfg(feature = "cors")]
+//!     {
+//!         use gateway::cors;
+//!         server_builder = server_builder.register_middleware(
+//!             1,
+//!             cors::Builder::new()
+//!                 .add_auth(
+//!                     "app",
+//!                     "token".to_string(),
+//!                     vec!["http://localhost:3000".to_string()],
+//!                 )
+//!                 .build(),
+//!         );
+//!     }
+//!     #[cfg(feature = "rate-limit")]
+//!     {
+//!         use gateway::{rate_limit, time};
+//!         server_builder = server_builder.register_middleware(
+//!             2,
+//!             rate_limit::Builder::new()
+//!                 .add_app(
+//!                     "app",
+//!                     rate_limit::config::Rules::new(
+//!                         Some(rate_limit::config::Quota {
+//!                             total: time::Frequency {
+//!                                 amount: 5,
+//!                                 interval: time::Time {
+//!                                     amount: 1,
+//!                                     unit: time::TimeUnit::Minutes,
+//!                                 },
 //!                             },
-//!                         },
-//!                         user: Some(time::Frequency {
-//!                             amount: 2,
-//!                             interval: time::Time {
-//!                                 amount: 1,
-//!                                 unit: time::TimeUnit::Minutes,
-//!                             },
+//!                             user: Some(time::Frequency {
+//!                                 amount: 2,
+//!                                 interval: time::Time {
+//!                                     amount: 1,
+//!                                     unit: time::TimeUnit::Minutes,
+//!                                 },
+//!                             }),
 //!                         }),
-//!                     }),
-//!                     HashMap::new(),
-//!                 ),
-//!                 rate_limit::EndpointBuilder::new(),
-//!             )
-//!             .build(rate_limit::datastore::InMemoryDatastore::new()),
-//!     )
-//!     .register_middleware(usize::MAX, GatewayBuilder::new())
-//!     .with_host("0.0.0.0".parse().unwrap())
-//!     .with_app_port(80)
-//!     .build()
-//!     .await
-//!     .unwrap()
-//!     .run()
-//!     .await;
+//!                         HashMap::new(),
+//!                     ),
+//!                     rate_limit::EndpointBuilder::new(),
+//!                 )
+//!                 .build(rate_limit::datastore::InMemoryDatastore::new()),
+//!         );
+//!     }
+//!     server_builder = server_builder.register_middleware(usize::MAX, GatewayBuilder::new());
+//!     server_builder
+//!         .with_host("0.0.0.0".parse().unwrap())
+//!         .with_app_port(80)
+//!         .build()
+//!         .await
+//!         .unwrap()
+//!         .run()
+//!         .await;
 //!     info!("Gateway stopped");
 //! }
 //! ```
