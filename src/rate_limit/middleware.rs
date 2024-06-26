@@ -1,7 +1,7 @@
 use super::{datastore, Datastore};
 use crate::{
     gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
-    http::{HeaderMapExt, Request, Response},
+    http::{headers, HeaderMapExt, Request, Response},
     Ctx,
 };
 use async_trait::async_trait;
@@ -35,7 +35,7 @@ impl Middleware {
 impl TMiddleware for Middleware {
     async fn run<'n>(&self, ctx: &Ctx, request: Request, next: Next<'n>) -> Result<Response> {
         let ip = match request
-            .header("X-Real-IP")
+            .header(headers::REAL_IP)
             .and_then(|header| header.to_str().ok())
         {
             Some(ip) => ip.to_string(),
@@ -98,10 +98,10 @@ impl TMiddleware for Middleware {
         }
         let mut response = next.run(request).await?;
         if let Some(rate_limit) = rate_limit {
-            response.insert_header("RateLimit-Limit", rate_limit.limit);
-            response.insert_header("RateLimit-Remaining", rate_limit.remaining);
+            response.insert_header(headers::RATE_LIMIT_LIMIT, rate_limit.limit);
+            response.insert_header(headers::RATE_LIMIT_REMAINING, rate_limit.remaining);
             response.insert_header(
-                "RateLimit-Reset",
+                headers::RATE_LIMIT_RESET,
                 rate_limit
                     .reset
                     .saturating_sub(chrono::Utc::now().timestamp() as usize),

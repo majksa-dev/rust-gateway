@@ -1,6 +1,6 @@
 use crate::{
     gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
-    http::{HeaderMapExt, Request, Response},
+    http::{headers, HeaderMapExt, Request, Response},
     Ctx,
 };
 use anyhow::{anyhow, bail, Context};
@@ -66,7 +66,7 @@ impl TMiddleware for Middleware {
             return Ok(Response::new(StatusCode::FORBIDDEN));
         }
         request.remove_header(header::AUTHORIZATION);
-        request.insert_header("X-Username", username);
+        request.insert_header(headers::USERNAME, username);
         next.run(request).await
     }
 }
