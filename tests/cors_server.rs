@@ -142,7 +142,7 @@ async fn should_fail_when_calling_valid_endpoint_without_origin(ctx: Context) {
         .await
         .unwrap()
         .status();
-    assert_eq!(status, StatusCode::BadRequest);
+    assert_eq!(status, StatusCode::Forbidden);
 }
 
 #[utils::test(setup = before_each, teardown = after_each)]
