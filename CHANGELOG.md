@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.5.0](https://github.com/majksa-dev/rust-gateway/compare/v0.4.1...v0.5.0) (2024-06-26)
+
+
+### Features
+
+* add convertors from raw config ([59790e6](https://github.com/majksa-dev/rust-gateway/commit/59790e60e54460455f6d23d5ad87ec18a3be5db6))
+* add jwt token based authentication ([adda6ee](https://github.com/majksa-dev/rust-gateway/commit/adda6ee4f23f38739b9052b0e76777d1baa57472))
+* **auth:** add basic auth middleware ([e5a256f](https://github.com/majksa-dev/rust-gateway/commit/e5a256ff3698de84deaa82df1dcea45c12366153))
+* **auth:** add jwt token validation for oidc ([f7e1949](https://github.com/majksa-dev/rust-gateway/commit/f7e1949a022a6d6ed874808bff1c2584c38bb1b7))
+* **cors:** allow switching between allow all, even without origin header ([cb08ad3](https://github.com/majksa-dev/rust-gateway/commit/cb08ad31a5de8a92e66ff3b3b7b7e22127141d5e))
+* split configuration structs from app context, to decrease memory allocation and time ([4dfac4e](https://github.com/majksa-dev/rust-gateway/commit/4dfac4e539b15b41c5fc376821de7fd4b8741683))
+* split middlewares into features, separated tests, etc. ([7c5748e](https://github.com/majksa-dev/rust-gateway/commit/7c5748ec0d2e56523e24f9ba4629f7041b27ba79))
+
+
+### Bug Fixes
+
+* **cors:** return forbidden instead of bad request ([20ab949](https://github.com/majksa-dev/rust-gateway/commit/20ab949b413b855ea1237de42af46d3c0ea5a89b))
+* **cors:** when no origins specified, allow all ([7d90f6b](https://github.com/majksa-dev/rust-gateway/commit/7d90f6baa8558cf0664f2c04ef08e3a5cd230ab1))
+* **deps:** bump io from 0.2.1 to 0.2.2 ([389644b](https://github.com/majksa-dev/rust-gateway/commit/389644be59a19230defbe41e8adb122cfa3e1cde))
+* do not throw error when inserting headers ([8b5b518](https://github.com/majksa-dev/rust-gateway/commit/8b5b518328b22873379b31d2b9bb15b2c123f129))
+* **http:** extract common http headers ([db8ad9a](https://github.com/majksa-dev/rust-gateway/commit/db8ad9a42f59e35c95e3e6a683714851204dd440))
+* lib.rs example usage ([545411e](https://github.com/majksa-dev/rust-gateway/commit/545411e3b516417fcd1f829c412c149e229ee5ea))
+
 ## [0.4.1](https://github.com/majksa-dev/rust-gateway/compare/v0.4.0...v0.4.1) (2024-06-22)
 
 
