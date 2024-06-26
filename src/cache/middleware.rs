@@ -1,7 +1,7 @@
 use super::{datastore, response::CachedResponseBody, Datastore};
 use crate::{
     gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
-    http::{HeaderMapExt, Request, Response},
+    http::{headers, HeaderMapExt, Request, Response},
     time::TimeUnit,
     Ctx,
 };
@@ -46,7 +46,7 @@ impl TMiddleware for Middleware {
             }
         };
         let ip = request
-            .header("X-Real-IP")
+            .header(headers::REAL_IP)
             .and_then(|header| header.to_str().ok())
             .unwrap_or("")
             .to_string()

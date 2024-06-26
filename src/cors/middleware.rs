@@ -1,6 +1,6 @@
 use crate::{
     gateway::{middleware::Middleware as TMiddleware, next::Next, Result},
-    http::{HeaderMapExt, Request, Response},
+    http::{headers, HeaderMapExt, Request, Response},
     Ctx,
 };
 use async_trait::async_trait;
@@ -33,7 +33,7 @@ impl TMiddleware for Middleware {
                 }
                 .global();
                 let token = match request
-                    .header("X-Api-Token")
+                    .header(headers::API_TOKEN)
                     .and_then(|header| header.to_str().ok())
                     .map(|header| header.to_string())
                 {
@@ -66,7 +66,7 @@ impl TMiddleware for Middleware {
         }
         .global();
         let token = match request
-            .header("X-Api-Token")
+            .header(headers::API_TOKEN)
             .and_then(|header| header.to_str().ok())
             .map(|header| header.to_string())
         {

@@ -10,6 +10,13 @@ use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 use crate::io::error::{error, Headers};
 
+pub const API_TOKEN: HeaderName = HeaderName::from_static("x-api-token");
+pub const USERNAME: HeaderName = HeaderName::from_static("x-username");
+pub const REAL_IP: HeaderName = HeaderName::from_static("x-real-ip");
+pub const RATE_LIMIT_LIMIT: HeaderName = HeaderName::from_static("ratelimit-limit");
+pub const RATE_LIMIT_REMAINING: HeaderName = HeaderName::from_static("ratelimit-remaining");
+pub const RATE_LIMIT_RESET: HeaderName = HeaderName::from_static("ratelimit-reset");
+
 #[async_trait]
 pub trait WriteHeaders {
     async fn write_headers(&mut self, headers: &HeaderMap) -> io::Result<()>;
