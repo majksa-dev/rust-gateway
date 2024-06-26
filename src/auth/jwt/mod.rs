@@ -44,3 +44,9 @@ impl Builder {
         MiddlewareBuilder::new(config)
     }
 }
+
+impl From<HashMap<String, config::App>> for Builder {
+    fn from(auth: HashMap<String, config::App>) -> Self {
+        Self(auth)
+    }
+}

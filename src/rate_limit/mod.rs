@@ -40,6 +40,16 @@ impl Builder {
     }
 }
 
+impl<EB: Into<EndpointBuilder>> From<HashMap<String, (config::Rules, EB)>> for Builder {
+    fn from(auth: HashMap<String, (config::Rules, EB)>) -> Self {
+        Self(
+            auth.into_iter()
+                .map(|(app, (root, endpoints))| (app, (root, endpoints.into())))
+                .collect::<HashMap<_, _>>(),
+        )
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct EndpointBuilder(HashMap<String, config::Rules>);
 
@@ -51,5 +61,11 @@ impl EndpointBuilder {
     pub fn add_endpoint(mut self, endpoint: &str, root: config::Rules) -> Self {
         self.0.insert(endpoint.to_string(), root);
         self
+    }
+}
+
+impl From<HashMap<String, config::Rules>> for EndpointBuilder {
+    fn from(rules: HashMap<String, config::Rules>) -> Self {
+        Self(rules)
     }
 }
