@@ -206,7 +206,7 @@
 //!             )
 //!             .build(rate_limit::datastore::InMemoryDatastore::new()),
 //!     )
-//!     .register_middleware(usize::MAX, GatewayBuilder)
+//!     .register_middleware(usize::MAX, GatewayBuilder::new())
 //!     .with_host("0.0.0.0".parse().unwrap())
 //!     .with_app_port(80)
 //!     .build()
