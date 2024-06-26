@@ -35,3 +35,9 @@ impl Builder {
         TcpOriginBuilder::new(config)
     }
 }
+
+impl From<HashMap<String, config::Connection>> for Builder {
+    fn from(connections: HashMap<String, config::Connection>) -> Self {
+        Self(connections)
+    }
+}

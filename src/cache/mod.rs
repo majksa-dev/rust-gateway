@@ -54,3 +54,9 @@ impl Builder {
         MiddlewareBuilder::new(config, datastore)
     }
 }
+
+impl From<HashMap<String, HashMap<String, config::Endpoint>>> for Builder {
+    fn from(auth: HashMap<String, HashMap<String, config::Endpoint>>) -> Self {
+        Self(auth)
+    }
+}
