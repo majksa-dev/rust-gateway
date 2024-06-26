@@ -46,7 +46,7 @@ impl TMiddleware for Middleware {
             }
         };
         let ip = request
-            .header(headers::REAL_IP)
+            .header(&headers::REAL_IP)
             .and_then(|header| header.to_str().ok())
             .unwrap_or("")
             .to_string()
