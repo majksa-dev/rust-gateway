@@ -5,7 +5,7 @@ edition = "2021"
 
 [features]
 debug = ["essentials/dotenv"]
-all = ["auth","cors","rate-limit","cache"]
+full = ["auth","cors","rate-limit","cache"]
 auth = []
 cors = []
 rate-limit = []
