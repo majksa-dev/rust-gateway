@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/majksa-dev/rust-gateway/compare/v0.5.1...v0.5.2) (2024-06-27)
+
+
+### Bug Fixes
+
+* rename all feature to full ([2615765](https://github.com/majksa-dev/rust-gateway/commit/26157658065d92636923dd1f31ccfe67c10a535e))
+
 ## [0.5.1](https://github.com/majksa-dev/rust-gateway/compare/v0.5.0...v0.5.1) (2024-06-27)
 
 
