@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/majksa-dev/rust-gateway/compare/v0.5.0...v0.5.1) (2024-06-27)
+
+
+### Bug Fixes
+
+* re-export router builder ([0f0a865](https://github.com/majksa-dev/rust-gateway/commit/0f0a8656d90549b733246f55bf38a804672b6156))
+
 ## [0.5.0](https://github.com/majksa-dev/rust-gateway/compare/v0.4.1...v0.5.0) (2024-06-26)
 
 
