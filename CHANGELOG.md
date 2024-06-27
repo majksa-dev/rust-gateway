@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/majksa-dev/rust-gateway/compare/v0.5.2...v0.5.3) (2024-06-27)
+
+
+### Bug Fixes
+
+* implement from iterators for middlewares, origins and routers ([c523c2f](https://github.com/majksa-dev/rust-gateway/commit/c523c2f9f90d137b55387480253c5080126d22ec))
+
 ## [0.5.2](https://github.com/majksa-dev/rust-gateway/compare/v0.5.1...v0.5.2) (2024-06-27)
 
 
