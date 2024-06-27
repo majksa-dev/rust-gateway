@@ -41,3 +41,9 @@ impl From<HashMap<String, config::Connection>> for Builder {
         Self(connections)
     }
 }
+
+impl FromIterator<(String, config::Connection)> for Builder {
+    fn from_iter<T: IntoIterator<Item = (String, config::Connection)>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}

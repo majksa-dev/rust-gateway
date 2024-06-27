@@ -60,3 +60,16 @@ impl From<HashMap<String, HashMap<String, config::Endpoint>>> for Builder {
         Self(auth)
     }
 }
+
+impl<I> FromIterator<(String, I)> for Builder
+where
+    I: IntoIterator<Item = (String, config::Endpoint)>,
+{
+    fn from_iter<T: IntoIterator<Item = (String, I)>>(iter: T) -> Self {
+        Self(
+            iter.into_iter()
+                .map(|(key, value)| (key, value.into_iter().collect::<HashMap<_, _>>()))
+                .collect(),
+        )
+    }
+}

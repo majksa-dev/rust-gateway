@@ -69,3 +69,24 @@ impl From<HashMap<String, config::Rules>> for EndpointBuilder {
         Self(rules)
     }
 }
+
+impl<I> FromIterator<(String, (config::Rules, I))> for Builder
+where
+    I: IntoIterator<Item = (String, config::Rules)>,
+{
+    fn from_iter<T: IntoIterator<Item = (String, (config::Rules, I))>>(iter: T) -> Self {
+        Self(
+            iter.into_iter()
+                .map(|(key, value)| {
+                    (
+                        key,
+                        (
+                            value.0,
+                            value.1.into_iter().collect::<HashMap<_, _>>().into(),
+                        ),
+                    )
+                })
+                .collect(),
+        )
+    }
+}

@@ -38,3 +38,11 @@ impl From<Vec<Route>> for ParamRouterBuilder {
         Self { routes }
     }
 }
+
+impl FromIterator<Route> for ParamRouterBuilder {
+    fn from_iter<T: IntoIterator<Item = Route>>(iter: T) -> Self {
+        Self {
+            routes: iter.into_iter().collect(),
+        }
+    }
+}

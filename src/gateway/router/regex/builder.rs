@@ -36,3 +36,11 @@ impl From<Vec<(Method, Regex, String)>> for RegexRouterBuilder {
         Self { routes }
     }
 }
+
+impl FromIterator<(Method, Regex, String)> for RegexRouterBuilder {
+    fn from_iter<T: IntoIterator<Item = (Method, Regex, String)>>(iter: T) -> Self {
+        Self {
+            routes: iter.into_iter().collect(),
+        }
+    }
+}

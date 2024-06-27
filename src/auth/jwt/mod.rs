@@ -50,3 +50,9 @@ impl From<HashMap<String, config::App>> for Builder {
         Self(auth)
     }
 }
+
+impl FromIterator<(String, config::App)> for Builder {
+    fn from_iter<T: IntoIterator<Item = (String, config::App)>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
