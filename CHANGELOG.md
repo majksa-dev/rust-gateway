@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/majksa-dev/rust-gateway/compare/v0.5.3...v0.5.4) (2024-06-28)
+
+
+### Bug Fixes
+
+* skip to next middleware ([e75bc6e](https://github.com/majksa-dev/rust-gateway/commit/e75bc6ec1b320308ef9d8e49ec8bc601f22cd2d6))
+
 ## [0.5.3](https://github.com/majksa-dev/rust-gateway/compare/v0.5.2...v0.5.3) (2024-06-27)
 
 
