@@ -34,13 +34,10 @@ impl Middleware {
 #[async_trait]
 impl TMiddleware for Middleware {
     async fn run<'n>(&self, ctx: &Ctx, request: Request, next: Next<'n>) -> Result<Response> {
-        let ip = match request
-            .header(&headers::REAL_IP)
-            .and_then(|header| header.to_str().ok())
-        {
-            Some(ip) => ip.to_string(),
+        let config = match self.ctx.get(ctx.app_id) {
+            Some(config) => config,
             None => {
-                return Ok(Response::new(StatusCode::BAD_REQUEST));
+                return next.run(request).await;
             }
         };
         let token = match request
@@ -52,13 +49,6 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
         };
-        let config = match self.ctx.get(ctx.app_id) {
-            Some(config) => config,
-            None => {
-                warn!("No config found for app: {}", ctx.app_id);
-                return Ok(Response::new(StatusCode::BAD_GATEWAY));
-            }
-        };
         let quota = config
             .get(ctx.endpoint_id)
             .and_then(|rules| rules.find_quota(&token))
@@ -68,6 +58,15 @@ impl TMiddleware for Middleware {
             None => {
                 warn!("No quota found for endpoint: {}", ctx.endpoint_id);
                 return next.run(request).await;
+            }
+        };
+        let ip = match request
+            .header(&headers::REAL_IP)
+            .and_then(|header| header.to_str().ok())
+        {
+            Some(ip) => ip.to_string(),
+            None => {
+                return Ok(Response::new(StatusCode::BAD_REQUEST));
             }
         };
         let total_key = format!("{}--{}--{}", ctx.app_id, ctx.endpoint_id, token);

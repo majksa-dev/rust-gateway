@@ -21,6 +21,13 @@ impl Middleware {
 #[async_trait]
 impl TMiddleware for Middleware {
     async fn run<'n>(&self, ctx: &Ctx, mut request: Request, next: Next<'n>) -> Result<Response> {
+        let config = match self.0.get(ctx.app_id) {
+            Some(config) => config,
+            None => {
+                return next.run(request).await;
+            }
+        }
+        .global();
         let authorization = match request
             .header(header::AUTHORIZATION)
             .and_then(|header| header.to_str().ok())
@@ -55,13 +62,6 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
         };
-        let config = match self.0.get(ctx.app_id) {
-            Some(config) => config,
-            None => {
-                return Ok(Response::new(StatusCode::UNAUTHORIZED));
-            }
-        }
-        .global();
         if !config.authenticate(&username, &password) {
             return Ok(Response::new(StatusCode::FORBIDDEN));
         }

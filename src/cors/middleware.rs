@@ -18,6 +18,13 @@ impl Middleware {
 #[async_trait]
 impl TMiddleware for Middleware {
     async fn run<'n>(&self, ctx: &Ctx, request: Request, next: Next<'n>) -> Result<Response> {
+        let config = match self.0.get(ctx.app_id) {
+            Some(config) => config,
+            None => {
+                return next.run(request).await;
+            }
+        }
+        .global();
         let origin = match request
             .header(header::ORIGIN)
             .and_then(|header| header.to_str().ok())
@@ -58,13 +65,6 @@ impl TMiddleware for Middleware {
             return Ok(response);
         }
         let method = request.method.clone();
-        let config = match self.0.get(ctx.app_id) {
-            Some(config) => config,
-            None => {
-                return Ok(Response::new(StatusCode::UNAUTHORIZED));
-            }
-        }
-        .global();
         let token = match request
             .header(&headers::API_TOKEN)
             .and_then(|header| header.to_str().ok())

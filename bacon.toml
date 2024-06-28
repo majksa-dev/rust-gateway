@@ -18,7 +18,7 @@ need_stdout = false
 [jobs.test]
 command = [
     "cargo", "test",
-    "--features", "all",
+    "--features", "full",
     "--color", "always",
     "--", "--color", "always",
 ]

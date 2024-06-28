@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::Context;
 use async_trait::async_trait;
-use essentials::{debug, warn};
+use essentials::debug;
 use http::{header, HeaderName, StatusCode};
 use pingora_cache::{
     key::{hash_key, CacheHashKey, CompactCacheKey},
@@ -31,17 +31,13 @@ impl Middleware {
 #[async_trait]
 impl TMiddleware for Middleware {
     async fn run<'n>(&self, ctx: &Ctx, mut request: Request, next: Next<'n>) -> Result<Response> {
-        let app = match self.ctx.get(ctx.app_id) {
-            Some(config) => config,
-            None => {
-                warn!("No config found for app: {}", ctx.app_id);
-                return Ok(Response::new(StatusCode::BAD_GATEWAY));
-            }
-        };
-        let endpoint = match app.get(ctx.endpoint_id) {
+        let endpoint = match self
+            .ctx
+            .get(ctx.app_id)
+            .and_then(|app| app.get(ctx.endpoint_id))
+        {
             Some(quota) => quota,
             None => {
-                warn!("Cache not configured for endpoint: {}", ctx.endpoint_id);
                 return next.run(request).await;
             }
         };
