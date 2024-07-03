@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/majksa-dev/rust-gateway/compare/v0.5.4...v0.5.5) (2024-07-03)
+
+
+### Bug Fixes
+
+* **deps:** bump serde_json from 1.0.118 to 1.0.120 ([85cb9f1](https://github.com/majksa-dev/rust-gateway/commit/85cb9f182676fdef524c0d30852d405159ba3cc3))
+
 ## [0.5.4](https://github.com/majksa-dev/rust-gateway/compare/v0.5.3...v0.5.4) (2024-06-28)
 
 
