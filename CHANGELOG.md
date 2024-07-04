@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/majksa-dev/rust-gateway/compare/v0.5.6...v0.6.0) (2024-07-04)
+
+
+### Features
+
+* enable tls for entrypoint communication (client -&gt; gateway). origin communication (gateway -> server) still only supports HTTP ([f13fb28](https://github.com/majksa-dev/rust-gateway/commit/f13fb28cc375daeb32a773de147464474075be7a))
+
 ## [0.5.6](https://github.com/majksa-dev/rust-gateway/compare/v0.5.5...v0.5.6) (2024-07-04)
 
 
