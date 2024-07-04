@@ -1,25 +1,22 @@
 use crate::{ConfigToContext, Result};
 use async_trait::async_trait;
-use std::net::SocketAddr;
 
 #[derive(Debug)]
 pub struct Connection {
-    pub addr: Box<SocketAddr>,
+    pub addr: String,
 }
 
 impl Connection {
-    pub fn new(addr: SocketAddr) -> Self {
-        Self {
-            addr: Box::new(addr),
-        }
+    pub fn new(addr: String) -> Self {
+        Self { addr }
     }
 }
 
 #[async_trait]
 impl ConfigToContext for Connection {
-    type Context = Box<SocketAddr>;
+    type Context = Box<str>;
 
     async fn into_context(self) -> Result<Self::Context> {
-        Ok(self.addr)
+        self.addr.into_context().await
     }
 }

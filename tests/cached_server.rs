@@ -174,7 +174,7 @@ async fn before_each() -> Context {
         essentials::install();
     }
     let listener = std::net::TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], 0))).unwrap();
-    let mock_addr = listener.local_addr().unwrap();
+    let mock_addr = listener.local_addr().unwrap().to_string();
     let mock_server = MockServer::builder().listener(listener).start().await;
     Mock::given(method("GET"))
         .and(path("/hello"))

@@ -45,7 +45,6 @@ config_into_context!(u64);
 config_into_context!(f32);
 config_into_context!(f64);
 config_into_context!(bool);
-config_into_context!(String);
 config_into_context!(());
 
 #[async_trait]
@@ -54,6 +53,15 @@ impl<I: Send> ConfigToContext for Vec<I> {
 
     async fn into_context(self) -> Result<Self::Context> {
         Ok(self.into_boxed_slice())
+    }
+}
+
+#[async_trait]
+impl ConfigToContext for String {
+    type Context = Box<str>;
+
+    async fn into_context(self) -> Result<Self::Context> {
+        Ok(self.into_boxed_str())
     }
 }
 

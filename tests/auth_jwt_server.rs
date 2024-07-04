@@ -118,7 +118,7 @@ async fn before_each() -> Context {
             .respond_with(RespondWithEmailHeader)
             .mount(&server)
             .await;
-        (server, mock_addr)
+        (server, mock_addr.to_string())
     };
     let (jwt_server, encoding_key) = {
         let encoding_key = EncodingKey::from_rsa_pem(PRIVATE_KEY.as_bytes()).unwrap();

@@ -7,9 +7,9 @@ use builder::TcpOriginBuilder;
 use origin::Origin;
 
 use crate::{MiddlewareConfig, MiddlewareCtx};
-use std::{collections::HashMap, net::SocketAddr};
+use std::collections::HashMap;
 
-type Context = MiddlewareCtx<Box<SocketAddr>, ()>;
+type Context = MiddlewareCtx<Box<str>, ()>;
 type Config = MiddlewareConfig<config::Connection, ()>;
 
 #[derive(Debug, Default)]

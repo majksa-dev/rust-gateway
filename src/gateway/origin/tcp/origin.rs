@@ -29,7 +29,7 @@ impl OriginServer for Origin {
                 return Ok(Response::new(StatusCode::NOT_FOUND));
             }
         };
-        let right = TcpStream::connect(*addr)
+        let right = TcpStream::connect(addr.to_string())
             .await
             .with_context(|| "Failed to connect to origin".to_string())?;
         let (mut right_rx, mut right_tx) = right.into_split();
