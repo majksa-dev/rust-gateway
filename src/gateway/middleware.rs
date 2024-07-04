@@ -12,7 +12,7 @@ pub trait Middleware: Sync {
         std::any::type_name::<Self>()
     }
 
-    async fn run<'n>(&self, ctx: &Ctx, request: Request, next: Next<'n>) -> Result<Response>;
+    async fn run(&self, ctx: &Ctx, request: Request, next: Next<'_>) -> Result<Response>;
 }
 
 pub type MiddlewareBuilderService = Box<dyn MiddlewareBuilder + Send + Sync + 'static>;

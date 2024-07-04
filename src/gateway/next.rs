@@ -13,13 +13,13 @@ pub struct Next<'a> {
     pub context: &'a Ctx,
     pub left_rx: OwnedReadHalf,
     pub left_remains: Vec<u8>,
-    pub it: Middlewares,
+    pub it: Middlewares<'a>,
 }
 
-unsafe impl<'a> Send for Next<'a> {}
-unsafe impl<'a> Sync for Next<'a> {}
+unsafe impl Send for Next<'_> {}
+unsafe impl Sync for Next<'_> {}
 
-impl<'a> Next<'a> {
+impl Next<'_> {
     pub async fn run(self, request: Request) -> Result<Response> {
         self.entrypoint
             .next(

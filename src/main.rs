@@ -18,7 +18,7 @@ struct Gateway;
 
 #[async_trait]
 impl Middleware for Gateway {
-    async fn run<'n>(&self, _ctx: &Ctx, request: Request, next: Next<'n>) -> Result<Response> {
+    async fn run(&self, _ctx: &Ctx, request: Request, next: Next<'_>) -> Result<Response> {
         println!("[gateway] before");
         let mut response = next.run(request).await?;
         println!("[gateway] after");

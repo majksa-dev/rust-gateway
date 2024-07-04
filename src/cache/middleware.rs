@@ -30,7 +30,7 @@ impl Middleware {
 
 #[async_trait]
 impl TMiddleware for Middleware {
-    async fn run<'n>(&self, ctx: &Ctx, mut request: Request, next: Next<'n>) -> Result<Response> {
+    async fn run(&self, ctx: &Ctx, mut request: Request, next: Next<'_>) -> Result<Response> {
         let endpoint = match self
             .ctx
             .get(ctx.app_id)

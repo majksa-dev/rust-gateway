@@ -8,7 +8,7 @@ use crate::{
     http::{server::Handler, HeaderMapExt, Request, Response, WriteResponse},
     server::app::GenerateKey,
     utils::{Also, AsyncAndThen},
-    ReadRequest, Service,
+    Middleware, ReadRequest, Service,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -26,7 +26,9 @@ use tokio::{
     },
 };
 
-pub type Middlewares = VecDeque<Arc<Service>>;
+pub type MiddlewaresItem = Arc<dyn Middleware + Send + Sync + 'static>;
+
+pub type Middlewares<'a> = Box<dyn Iterator<Item = MiddlewaresItem> + Send + Sync + 'a>;
 
 pub struct EntryPointHandler(pub Arc<EntryPoint>);
 
@@ -57,7 +59,7 @@ pub struct EntryPoint {
     origin: Origin,
     generate_peer_key: Box<GenerateKey>,
     peers: HashMap<String, (Id, RouterService)>,
-    middlewares: Middlewares,
+    middlewares: Vec<MiddlewaresItem>,
 }
 
 unsafe impl Sync for EntryPoint {}
@@ -78,7 +80,7 @@ impl EntryPoint {
                 .enumerate()
                 .map(|(id, (k, v))| (k, (id as Id, v)))
                 .collect(),
-            middlewares: middlewares.into_iter().map(Arc::new).collect(),
+            middlewares: middlewares.into_iter().map(Arc::from).collect(),
         }
     }
 
@@ -88,9 +90,9 @@ impl EntryPoint {
         request: Request,
         left_rx: OwnedReadHalf,
         left_remains: Vec<u8>,
-        mut it: Middlewares,
+        mut it: Middlewares<'_>,
     ) -> Result<Response> {
-        match it.pop_front() {
+        match it.next() {
             Some(middleware) => {
                 debug!(middleware = middleware.name(), request = ?request, "-->");
                 let next = Next {
@@ -98,7 +100,7 @@ impl EntryPoint {
                     context,
                     left_rx,
                     left_remains,
-                    it,
+                    it: Box::new(it),
                 };
                 middleware
                     .run(context, request, next)
@@ -187,7 +189,7 @@ impl EntryPoint {
             endpoint_id,
         };
         debug!("Context: {:?}", context);
-        let it = self.middlewares.clone();
+        let it = Box::new(self.middlewares.iter().cloned());
         self.next(&context, request, left_rx, left_remains, it)
             .await
     }
