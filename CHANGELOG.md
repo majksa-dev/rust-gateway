@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/majksa-dev/rust-gateway/compare/v0.6.0...v0.6.1) (2024-07-04)
+
+
+### Bug Fixes
+
+* cors origin auth and better error logging ([9742964](https://github.com/majksa-dev/rust-gateway/commit/97429640bb73b5bf914b49574dedf2476f43dbee))
+
 ## [0.6.0](https://github.com/majksa-dev/rust-gateway/compare/v0.5.6...v0.6.0) (2024-07-04)
 
 
