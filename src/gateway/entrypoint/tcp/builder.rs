@@ -1,7 +1,6 @@
-use std::{
-    io,
-    net::{IpAddr, SocketAddr},
-};
+use std::net::{IpAddr, SocketAddr};
+
+use anyhow::Result;
 
 use crate::{EntryPoint, HttpServer};
 
@@ -12,7 +11,7 @@ pub struct TcpServer {
 }
 
 impl TcpServer {
-    pub async fn run(self) -> io::Result<()> {
+    pub async fn run(self) -> Result<()> {
         self.app.run().await
     }
 }

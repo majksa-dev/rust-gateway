@@ -1,5 +1,5 @@
 use anyhow::Result;
-use essentials::debug;
+use essentials::{debug, error};
 use futures::future::join_all;
 use tokio::sync::{mpsc, oneshot};
 #[cfg(feature = "tls")]
@@ -176,7 +176,9 @@ impl Server {
                 result = self.app.run() => {
                     debug!("App stopped");
                     tx_health.send(()).unwrap();
-                    result.unwrap();
+                    if let Err(err) = result {
+                        error!("App error: {:?}", err);
+                    }
                 }
                 _ = rx_app => {}
             }
@@ -187,7 +189,9 @@ impl Server {
                 result = self.health_check.run() => {
                     debug!("health_check stopped");
                     tx_app.send(()).unwrap();
-                    result.unwrap();
+                    if let Err(err) = result {
+                        error!("health_check error: {:?}", err);
+                    }
                 }
                 _ = rx_health => {}
             }

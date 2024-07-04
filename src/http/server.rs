@@ -1,10 +1,8 @@
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use essentials::debug;
 use std::{net::SocketAddr, sync::Arc};
-use tokio::{
-    io::Result,
-    net::{TcpListener, TcpStream},
-};
+use tokio::net::{TcpListener, TcpStream};
 
 #[async_trait]
 pub trait Handler {
@@ -25,7 +23,9 @@ impl<H: Handler + Send + Sync + 'static> Server<H> {
     }
 
     pub async fn run(self) -> Result<()> {
-        let listener = TcpListener::bind(self.addr).await?;
+        let listener = TcpListener::bind(self.addr)
+            .await
+            .with_context(|| format!("Failed to bind to address: {}", self.addr))?;
         debug!("Listening on: {}", self.addr);
         loop {
             let (stream, _) = listener.accept().await?;

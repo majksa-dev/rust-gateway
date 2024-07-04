@@ -25,46 +25,6 @@ impl TMiddleware for Middleware {
             }
         }
         .global();
-        let origin = match request
-            .header(header::ORIGIN)
-            .and_then(|header| header.to_str().ok())
-            .map(|header| header.to_string())
-        {
-            Some(origin) => origin,
-            None => {
-                let config = match self.0.get(ctx.app_id) {
-                    Some(config) => config,
-                    None => {
-                        return Ok(Response::new(StatusCode::UNAUTHORIZED));
-                    }
-                }
-                .global();
-                let token = match request
-                    .header(&headers::API_TOKEN)
-                    .and_then(|header| header.to_str().ok())
-                    .map(|header| header.to_string())
-                {
-                    Some(token) => token,
-                    None => {
-                        return Ok(Response::new(StatusCode::UNAUTHORIZED));
-                    }
-                };
-                if let Some(auth) = config.find_auth(&token) {
-                    if !auth.is_any_origin_allowed() {
-                        return Ok(Response::new(StatusCode::FORBIDDEN));
-                    }
-                } else {
-                    return Ok(Response::new(StatusCode::UNAUTHORIZED));
-                }
-                return Ok(Response::new(StatusCode::BAD_REQUEST));
-            }
-        };
-        if request.method == http::Method::OPTIONS {
-            let mut response = Response::new(StatusCode::NO_CONTENT);
-            response.insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-            return Ok(response);
-        }
-        let method = request.method.clone();
         let token = match request
             .header(&headers::API_TOKEN)
             .and_then(|header| header.to_str().ok())
@@ -75,8 +35,31 @@ impl TMiddleware for Middleware {
                 return Ok(Response::new(StatusCode::UNAUTHORIZED));
             }
         };
+        let origin = match request
+            .header(header::ORIGIN)
+            .and_then(|header| header.to_str().ok())
+            .map(|header| header.to_string())
+        {
+            Some(origin) => origin,
+            None => {
+                if let Some(auth) = config.find_auth(&token) {
+                    if !auth.is_any_origin_allowed() {
+                        return Ok(Response::new(StatusCode::FORBIDDEN));
+                    }
+                } else {
+                    return Ok(Response::new(StatusCode::UNAUTHORIZED));
+                }
+                return next.run(request).await;
+            }
+        };
+        if request.method == http::Method::OPTIONS {
+            let mut response = Response::new(StatusCode::NO_CONTENT);
+            response.insert_header(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+            return Ok(response);
+        }
+        let method = request.method.clone();
         if let Some(auth) = config.find_auth(&token) {
-            if !auth.is_origin_allowed(&origin) {
+            if !auth.is_any_origin_allowed() && !auth.is_origin_allowed(&origin) {
                 return Ok(Response::new(StatusCode::FORBIDDEN));
             }
         } else {

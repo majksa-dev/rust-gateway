@@ -9,6 +9,7 @@ use std::net::SocketAddr;
 use testing_utils::macros as utils;
 use testing_utils::surf;
 use testing_utils::surf::StatusCode;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -76,6 +77,18 @@ async fn should_fail_when_calling_valid_endpoint_without_origin(ctx: Context) {
 
 #[utils::test(setup = before_each, teardown = after_each)]
 #[cfg_attr(not(feature = "cors"), ignore)]
+async fn should_succeed_when_calling_valid_endpoint_without_origin(ctx: Context) {
+    let status = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
+        .header("X-Api-Token", "token2")
+        .header("Host", "app")
+        .await
+        .unwrap()
+        .status();
+    assert_eq!(status, StatusCode::Ok);
+}
+
+#[utils::test(setup = before_each, teardown = after_each)]
+#[cfg_attr(not(feature = "cors"), ignore)]
 async fn should_fail_when_calling_valid_endpoint_with_invalid_origin(ctx: Context) {
     let status = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
         .header("X-Api-Token", "token")
@@ -108,7 +121,7 @@ struct Context {
 
 async fn before_each() -> Context {
     if env::var("CI").is_err() {
-        env::set_var("RUST_LOG", "trace");
+        env::set_var("RUST_LOG", "info");
         env::set_var("RUST_BACKTRACE", "0");
         env::set_var("APP_ENV", "d");
         essentials::install();
@@ -150,12 +163,26 @@ async fn before_each() -> Context {
                     "token".to_string(),
                     vec!["http://localhost:3000".to_string()],
                 )
+                .add_token("app", "token2".to_string())
                 .build(),
         );
     }
     let server = server_builder.build().await.unwrap();
-    let server_thread = tokio::spawn(server.run());
-    wait_for_server(ports[1]).await;
+    let (tx, mut rx) = mpsc::channel(2);
+    let tx_2 = tx.clone();
+    let server_thread = tokio::spawn(async move {
+        server.run().await;
+        let _ = tx.send(false).await;
+    });
+    let health_port = ports[1];
+    tokio::spawn(async move {
+        wait_for_server(health_port).await;
+        let _ = tx_2.send(true).await;
+    });
+    let running = rx.recv().await.unwrap_or_default();
+    if !running {
+        panic!("Server could not start");
+    }
     Context {
         app: ports[0],
         _app_server: server_thread,

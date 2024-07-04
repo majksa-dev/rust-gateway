@@ -1,5 +1,5 @@
+use anyhow::{bail, Result};
 use std::net::{IpAddr, SocketAddr};
-
 use tokio::sync::{mpsc, oneshot};
 use tokio_rustls::TlsAcceptor;
 
@@ -14,7 +14,7 @@ pub struct TlsServer {
 
 impl TlsServer {
     /// Start the server.
-    pub async fn run(self) -> std::io::Result<()> {
+    pub async fn run(self) -> Result<()> {
         let (tx_tls, rx_tls) = oneshot::channel();
         let (tx_tcp, rx_tcp) = oneshot::channel();
         let (tx, mut rx) = mpsc::channel(2);
@@ -23,24 +23,24 @@ impl TlsServer {
             tokio::select! {
                 result = self.tls.run() => {
                     tx_tcp.send(()).unwrap();
-                    result.unwrap();
+                    let _ = tx.send(result).await;
                 }
                 _ = rx_tls => {}
             }
-            let _ = tx.send(()).await;
         });
         tokio::spawn(async move {
             tokio::select! {
                 result = self.tcp.run() => {
                     tx_tls.send(()).unwrap();
-                    result.unwrap();
+
+                    let _ = tx_2.send(result).await;
                 }
                 _ = rx_tcp => {}
             }
-            let _ = tx_2.send(()).await;
         });
-        rx.recv().await;
-        Ok(())
+        rx.recv()
+            .await
+            .unwrap_or_else(|| bail!("TLS server stopped unexpectedly"))
     }
 }
 
