@@ -252,6 +252,7 @@ pub use gateway::{
 };
 pub use http::{
     server::{Handler, Server as HttpServer},
+    stream::{ReadHalf, WriteHalf},
     ReadHeaders, ReadRequest, ReadResponse, Request, Response, WriteHeaders, WriteRequest,
     WriteResponse,
 };
@@ -259,4 +260,6 @@ pub use server::{
     app::{builder, Server, ServerBuilder},
     health_check::HealthCheck,
 };
+#[cfg(feature = "tls")]
+pub use tokio_rustls;
 pub use utils::time;

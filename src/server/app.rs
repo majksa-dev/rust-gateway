@@ -2,16 +2,17 @@ use anyhow::Result;
 use essentials::debug;
 use futures::future::join_all;
 use tokio::sync::{mpsc, oneshot};
+#[cfg(feature = "tls")]
+use tokio_rustls::{rustls, TlsAcceptor};
 
-use crate::gateway::entrypoint::{EntryPoint, EntryPointHandler};
+use crate::gateway::entrypoint::{self, EntryPoint};
 use crate::gateway::middleware::MiddlewareBuilderService;
 use crate::gateway::router::{RouterBuilder, RouterBuilderService};
 use crate::http::server::Server as HttpServer;
 use crate::http::Request;
 use crate::{MiddlewareBuilder, OriginBuilder, OriginServerBuilder};
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
-use std::sync::Arc;
 
 use super::health_check::HealthCheck;
 
@@ -25,6 +26,10 @@ pub struct ServerBuilder {
     middlewares: HashMap<usize, MiddlewareBuilderService>,
     host: IpAddr,
     app_port: u16,
+    #[cfg(feature = "tls")]
+    app_tls_port: u16,
+    #[cfg(feature = "tls")]
+    tls_config: TlsAcceptor,
     health_check_port: u16,
 }
 
@@ -37,6 +42,14 @@ impl ServerBuilder {
             middlewares: HashMap::new(),
             host: IpAddr::from([127, 0, 0, 1]), // Default host (localhost)
             app_port: 80,
+            #[cfg(feature = "tls")]
+            app_tls_port: 443,
+            #[cfg(feature = "tls")]
+            tls_config: TlsAcceptor::from(std::sync::Arc::new(
+                rustls::ServerConfig::builder()
+                    .with_no_client_auth()
+                    .with_cert_resolver(std::sync::Arc::new(entrypoint::tls::EmptyResolver::new())),
+            )),
             health_check_port: 9000,
         }
     }
@@ -71,6 +84,18 @@ impl ServerBuilder {
         self
     }
 
+    /// Set the TLS configuration for the application service.
+    /// The default configuration is None
+    /// The configuration is a tuple of the port and the TLS acceptor.
+    /// The acceptor is used to create a TLS server.
+    /// The server will listen on the specified port.
+    #[cfg(feature = "tls")]
+    pub fn with_tls(mut self, port: u16, acceptor: TlsAcceptor) -> Self {
+        self.app_tls_port = port;
+        self.tls_config = acceptor;
+        self
+    }
+
     /// Set the port for the health check service.
     /// The default port is 9000
     pub fn with_health_check_port(mut self, port: u16) -> Self {
@@ -102,15 +127,25 @@ impl ServerBuilder {
         )
         .await
         .into_iter()
-        .collect::<Result<VecDeque<_>>>()?;
-        let handler = EntryPointHandler(Arc::new(EntryPoint::new(
+        .collect::<Result<Vec<_>>>()?;
+        let entrypoint = EntryPoint::new(
             self.origin.build(&ids, &endpoints).await?,
             self.generate_peer_key,
             peers,
             middlewares,
-        )));
+        );
+        #[cfg(feature = "tls")]
+        let handler = entrypoint::tls::build(
+            entrypoint,
+            self.host,
+            self.app_port,
+            self.app_tls_port,
+            self.tls_config,
+        );
+        #[cfg(not(feature = "tls"))]
+        let handler = entrypoint::tcp::build(entrypoint, self.host, self.app_port);
         let server = Server {
-            app: HttpServer::new(SocketAddr::new(self.host, self.app_port), handler),
+            app: handler,
             health_check: HttpServer::new(
                 SocketAddr::new(self.host, self.health_check_port),
                 HealthCheck,
@@ -121,7 +156,10 @@ impl ServerBuilder {
 }
 
 pub struct Server {
-    pub app: HttpServer<EntryPointHandler>,
+    #[cfg(feature = "tls")]
+    pub app: entrypoint::tls::TlsServer,
+    #[cfg(not(feature = "tls"))]
+    pub app: entrypoint::tcp::TcpServer,
     pub health_check: HttpServer<HealthCheck>,
 }
 

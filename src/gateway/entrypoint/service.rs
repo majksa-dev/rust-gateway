@@ -1,59 +1,16 @@
-use super::{
-    ctx::{Ctx, Id},
-    next::Next,
-    origin::Origin,
-    router::RouterService,
-};
 use crate::{
-    http::{server::Handler, HeaderMapExt, Request, Response, WriteResponse},
+    http::{HeaderMapExt, Request, Response, WriteResponse},
     server::app::GenerateKey,
     utils::{Also, AsyncAndThen},
-    Middleware, ReadRequest, Service,
+    Ctx, Id, Next, Origin, ReadRequest, RouterService, Service,
 };
 use anyhow::Result;
-use async_trait::async_trait;
 use essentials::{debug, error, info, warn};
 use http::{header, StatusCode};
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-};
-use tokio::{
-    io::{self, AsyncWriteExt, BufReader},
-    net::{
-        tcp::{OwnedReadHalf, OwnedWriteHalf},
-        TcpStream,
-    },
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use tokio::io::{self, AsyncWriteExt, BufReader};
 
-pub type MiddlewaresItem = Arc<dyn Middleware + Send + Sync + 'static>;
-
-pub type Middlewares<'a> = Box<dyn Iterator<Item = MiddlewaresItem> + Send + Sync + 'a>;
-
-pub struct EntryPointHandler(pub Arc<EntryPoint>);
-
-#[async_trait]
-impl Handler for EntryPointHandler {
-    async fn handle(&self, left: TcpStream) {
-        let ip = left.peer_addr().ok();
-        info!(ip = ?ip, "Connection received");
-        let (left_rx, mut left_tx) = left.into_split();
-        match self.0.handle(left_rx, &mut left_tx).await {
-            Ok(_) => {
-                info!(ip = ?ip, "Connection closed");
-            }
-            Err(error) => {
-                error!("{}", error);
-                if let Err(err) = left_tx
-                    .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-                    .await
-                {
-                    warn!(ip = ?ip, "Failed to write response: {}", err);
-                };
-            }
-        }
-    }
-}
+use super::{Middlewares, MiddlewaresItem, ReadHalf, WriteHalf};
 
 pub struct EntryPoint {
     origin: Origin,
@@ -66,11 +23,11 @@ unsafe impl Sync for EntryPoint {}
 unsafe impl Send for EntryPoint {}
 
 impl EntryPoint {
-    pub fn new(
+    pub fn new<M: IntoIterator<Item = Service>>(
         origin: Origin,
         generate_peer_key: Box<GenerateKey>,
         peers: HashMap<String, RouterService>,
-        middlewares: VecDeque<Service>,
+        middlewares: M,
     ) -> Self {
         Self {
             origin,
@@ -88,7 +45,7 @@ impl EntryPoint {
         &self,
         context: &Ctx,
         request: Request,
-        left_rx: OwnedReadHalf,
+        left_rx: ReadHalf,
         left_remains: Vec<u8>,
         mut it: Middlewares<'_>,
     ) -> Result<Response> {
@@ -117,11 +74,31 @@ impl EntryPoint {
         }
     }
 
-    pub async fn handle(
-        &self,
-        mut left_rx: OwnedReadHalf,
-        left_tx: &mut OwnedWriteHalf,
-    ) -> io::Result<()> {
+    pub(crate) async fn safe_handle(
+        self: &Arc<EntryPoint>,
+        ip: Option<SocketAddr>,
+        rx: ReadHalf,
+        mut tx: WriteHalf,
+    ) {
+        match self.handle(rx, &mut tx).await {
+            Ok(_) => {
+                info!(ip = ?ip, "Connection closed");
+            }
+            Err(error) => {
+                error!("{}", error);
+                if let Err(err) = tx
+                    .write_all(
+                        b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    )
+                    .await
+                {
+                    warn!(ip = ?ip, "Failed to write response: {}", err);
+                };
+            }
+        }
+    }
+
+    async fn handle(&self, mut left_rx: ReadHalf, left_tx: &mut WriteHalf) -> io::Result<()> {
         debug!(target: "entrypoint", stage = "request", "0 - init");
         let mut request_reader = BufReader::new(&mut left_rx);
         let request = request_reader.read_request().await?;
@@ -158,7 +135,7 @@ impl EntryPoint {
     async fn handle_request(
         &self,
         request: Request,
-        left_rx: OwnedReadHalf,
+        left_rx: ReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<Response> {
         let app_id = match (self.generate_peer_key)(&request) {

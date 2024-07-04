@@ -3,15 +3,14 @@ use super::{
     Result,
 };
 use crate::{
-    http::{Request, Response},
+    http::{stream::ReadHalf, Request, Response},
     Ctx,
 };
-use tokio::net::tcp::OwnedReadHalf;
 
 pub struct Next<'a> {
     pub entrypoint: &'a EntryPoint,
     pub context: &'a Ctx,
-    pub left_rx: OwnedReadHalf,
+    pub left_rx: ReadHalf,
     pub left_remains: Vec<u8>,
     pub it: Middlewares<'a>,
 }

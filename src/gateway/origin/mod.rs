@@ -1,10 +1,9 @@
 use crate::{
-    http::{Request, Response},
+    http::{stream::ReadHalf, Request, Response},
     Ctx, Result,
 };
 use async_trait::async_trait;
 use std::{collections::HashMap, io::Read};
-use tokio::net::tcp::OwnedReadHalf;
 
 pub mod tcp;
 
@@ -21,7 +20,7 @@ pub trait OriginServer {
         &self,
         context: &Ctx,
         request: Request,
-        left_rx: OwnedReadHalf,
+        left_rx: ReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<Response>;
 }

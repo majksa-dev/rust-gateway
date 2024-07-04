@@ -1,8 +1,8 @@
-use crate::http::response::ResponseBody;
+use crate::http::{response::ResponseBody, stream::WriteHalf};
 use async_trait::async_trait;
 use tokio::{
     io::{self, AsyncReadExt, AsyncWriteExt},
-    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    net::tcp::OwnedReadHalf,
 };
 
 #[derive(Debug)]
@@ -25,8 +25,11 @@ impl ResponseBody for OriginResponse {
         Ok(buf)
     }
 
-    async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()> {
+    async fn copy_to<'a>(&mut self, writer: &'a mut WriteHalf) -> io::Result<()> {
         writer.write_all(self.remains.as_slice()).await?;
+        #[cfg(feature = "tls")]
+        tokio::io::copy(&mut self.reader, writer).await?;
+        #[cfg(not(feature = "tls"))]
         ::io::copy_tcp(&mut self.reader, writer).await?;
         Ok(())
     }
