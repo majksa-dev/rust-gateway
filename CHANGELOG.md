@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.6](https://github.com/majksa-dev/rust-gateway/compare/v0.5.5...v0.5.6) (2024-07-04)
+
+
+### Bug Fixes
+
+* **performance:** pass middlewares as iterator ([f2d1046](https://github.com/majksa-dev/rust-gateway/commit/f2d10461059aed9972a138be476fbc4ca44281d7))
+
 ## [0.5.5](https://github.com/majksa-dev/rust-gateway/compare/v0.5.4...v0.5.5) (2024-07-03)
 
 
