@@ -1,10 +1,7 @@
 use async_trait::async_trait;
-use tokio::{
-    io::{self, AsyncWriteExt},
-    net::tcp::OwnedWriteHalf,
-};
+use tokio::io::{self, AsyncWriteExt};
 
-use crate::http::response::ResponseBody;
+use crate::http::{response::ResponseBody, stream::WriteHalf};
 
 #[derive(Debug)]
 pub struct CachedResponseBody {
@@ -23,7 +20,7 @@ impl ResponseBody for CachedResponseBody {
         Ok(self.body)
     }
 
-    async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()> {
+    async fn copy_to<'a>(&mut self, writer: &'a mut WriteHalf) -> io::Result<()> {
         writer.write_all(self.body.as_bytes()).await
     }
 }

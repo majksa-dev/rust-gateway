@@ -1,12 +1,9 @@
-use super::{headers::HeaderMapExt, ReadHeaders, WriteHeaders};
+use super::{headers::HeaderMapExt, stream::WriteHalf, ReadHeaders, WriteHeaders};
 use crate::io::error::{error, ResponseStatusLine};
 use async_trait::async_trait;
 use http::{header, HeaderMap, HeaderValue, StatusCode};
 use std::fmt::Debug;
-use tokio::{
-    io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt},
-    net::tcp::OwnedWriteHalf,
-};
+use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
 
 #[derive(Debug)]
 pub struct Response {
@@ -20,7 +17,7 @@ pub struct Response {
 pub trait ResponseBody: Debug {
     async fn read_all(self: Box<Self>, len: usize) -> io::Result<String>;
 
-    async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()>;
+    async fn copy_to<'a>(&mut self, writer: &'a mut WriteHalf) -> io::Result<()>;
 }
 
 impl Response {

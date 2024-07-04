@@ -1,6 +1,6 @@
 use super::response::OriginResponse;
 use crate::{
-    http::{ReadResponse, Request, Response},
+    http::{stream::ReadHalf, ReadResponse, Request, Response},
     Ctx, OriginServer, Result, WriteRequest,
 };
 use anyhow::Context;
@@ -9,7 +9,7 @@ use essentials::debug;
 use http::StatusCode;
 use tokio::{
     io::{AsyncWriteExt, BufReader},
-    net::{tcp::OwnedReadHalf, TcpStream},
+    net::TcpStream,
 };
 
 pub struct Origin(pub super::Context);
@@ -20,7 +20,7 @@ impl OriginServer for Origin {
         &self,
         context: &Ctx,
         request: Request,
-        mut left_rx: OwnedReadHalf,
+        mut left_rx: ReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<Response> {
         let addr = match self.0.get(context.app_id) {
@@ -44,6 +44,11 @@ impl OriginServer for Origin {
             .await
             .with_context(|| format!("Failed to send remains to origin: {:?}", left_remains))?;
         debug!("Remains sent to origin: {:?}", left_remains);
+        #[cfg(feature = "tls")]
+        tokio::spawn(async move {
+            tokio::io::copy(&mut left_rx, &mut right_tx).await.unwrap();
+        });
+        #[cfg(not(feature = "tls"))]
         tokio::spawn(async move {
             ::io::copy_tcp(&mut left_rx, &mut right_tx).await.unwrap();
         });
