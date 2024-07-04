@@ -4,14 +4,13 @@ use essentials::info;
 use gateway::{
     http::{response::ResponseBody, HeaderMapExt, Request, Response},
     tcp, Ctx, Middleware, MiddlewareBuilder, Next, Origin, OriginServer, OriginServerBuilder,
-    ParamRouterBuilder, Result, Service,
+    ParamRouterBuilder, ReadHalf, Result, Service, WriteHalf,
 };
 use http::{header, Method, StatusCode};
 use std::{collections::HashMap, env, path::Path};
 use tokio::{
     fs::File,
     io::{self, AsyncReadExt},
-    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
 };
 
 struct Gateway;
@@ -80,7 +79,7 @@ impl OriginServer for FileServer {
         &self,
         _ctx: &Ctx,
         request: Request,
-        _left_rx: OwnedReadHalf,
+        _left_rx: ReadHalf,
         _left_remains: Vec<u8>,
     ) -> Result<Response> {
         println!("[origin] Request received: {:?}", request);
@@ -113,9 +112,9 @@ impl ResponseBody for FileResponse {
         Ok(String::from_utf8(buf).unwrap())
     }
 
-    async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf) -> io::Result<()> {
+    async fn copy_to<'a>(&mut self, writer: &'a mut WriteHalf) -> io::Result<()> {
         println!("copying response to client");
-        ::io::copy_file(&mut self.file, writer).await?;
+        tokio::io::copy(&mut self.file, writer).await?;
         Ok(())
     }
 }
