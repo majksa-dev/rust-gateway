@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/majksa-dev/rust-gateway/compare/v0.6.1...v0.6.2) (2024-07-04)
+
+
+### Bug Fixes
+
+* allow specifying host as hostname ([4b50b63](https://github.com/majksa-dev/rust-gateway/commit/4b50b6321f5ea2e382dc4c144f7d5acaa8eae021))
+
 ## [0.6.1](https://github.com/majksa-dev/rust-gateway/compare/v0.6.0...v0.6.1) (2024-07-04)
 
 
