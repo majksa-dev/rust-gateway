@@ -1,6 +1,6 @@
 use super::response::OriginResponse;
 use crate::{
-    http::{stream::ReadHalf, ReadResponse, Request, Response},
+    http::{stream::ReadHalf, HeaderMapExt, ReadResponse, Request, Response},
     Ctx, OriginServer, Result, WriteRequest,
 };
 use anyhow::Context;
@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use essentials::debug;
 use http::StatusCode;
 use tokio::{
-    io::{AsyncWriteExt, BufReader},
+    io::{AsyncReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
 };
 
@@ -39,6 +39,7 @@ impl OriginServer for Origin {
             .await
             .with_context(|| format!("Failed to send request to origin: {:?}", request))?;
         debug!("Request sent to origin: {:?}", request);
+        let request_body_size = request.get_content_length().map(|v| v - left_remains.len());
         right_tx
             .write_all(left_remains.as_slice())
             .await
@@ -46,11 +47,19 @@ impl OriginServer for Origin {
         debug!("Remains sent to origin: {:?}", left_remains);
         #[cfg(feature = "tls")]
         tokio::spawn(async move {
-            tokio::io::copy(&mut left_rx, &mut right_tx, None).await.unwrap();
+            if let Some(size) = request_body_size {
+                tokio::io::copy(&mut left_rx.take(size as u64), &mut right_tx)
+                    .await
+                    .unwrap();
+            } else {
+                tokio::io::copy(&mut left_rx, &mut right_tx).await.unwrap();
+            }
         });
         #[cfg(not(feature = "tls"))]
         tokio::spawn(async move {
-            ::io::copy_tcp(&mut left_rx, &mut right_tx, None).await.unwrap();
+            ::io::copy_tcp(&mut left_rx, &mut right_tx, request_size)
+                .await
+                .unwrap();
         });
         debug!("Body sent to origin");
         let mut response_reader = BufReader::new(&mut right_rx);

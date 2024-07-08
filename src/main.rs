@@ -112,7 +112,7 @@ impl ResponseBody for FileResponse {
         Ok(String::from_utf8(buf).unwrap())
     }
 
-    async fn copy_to<'a>(&mut self, writer: &'a mut WriteHalf) -> io::Result<()> {
+    async fn copy_to<'a>(&mut self, writer: &'a mut WriteHalf, _length: Option<usize>) -> io::Result<()> {
         println!("copying response to client");
         tokio::io::copy(&mut self.file, writer).await?;
         Ok(())

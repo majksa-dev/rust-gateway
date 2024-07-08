@@ -20,7 +20,11 @@ impl ResponseBody for CachedResponseBody {
         Ok(self.body)
     }
 
-    async fn copy_to<'a>(&mut self, writer: &'a mut WriteHalf) -> io::Result<()> {
-        writer.write_all(self.body.as_bytes()).await
+    async fn copy_to<'a>(&mut self, writer: &'a mut WriteHalf, length: Option<usize>) -> io::Result<()> {
+        if let Some(length) = length {
+            writer.write_all(&self.body.as_bytes()[..length]).await
+        } else {
+            writer.write_all(self.body.as_bytes()).await
+        }
     }
 }

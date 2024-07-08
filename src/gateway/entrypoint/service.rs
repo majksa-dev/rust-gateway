@@ -113,8 +113,9 @@ impl EntryPoint {
                     .await
                     .also(|_| debug!(target: "entrypoint", stage = "response", data = ?response, "3 - wrote response"))
                     .async_and_then(move |_| async move {
+                        let length = response.get_content_length();
                         if let Some(mut body) = response.body() {
-                            body.copy_to(left_tx)
+                            body.copy_to(left_tx, length)
                                 .await
                         } else {
                             Ok(())
