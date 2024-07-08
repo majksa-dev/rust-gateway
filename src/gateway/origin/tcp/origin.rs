@@ -11,7 +11,7 @@ use http::StatusCode;
 #[cfg(feature = "tls")]
 use tokio::io::AsyncReadExt;
 use tokio::{
-    io::{AsyncWriteExt, BufReader},
+    io::{AsyncReadExt, AsyncWriteExt, BufReader},
     net::TcpStream,
 };
 
@@ -74,6 +74,7 @@ impl OriginServer for Origin {
             }
         }));
         debug!("Body sent to origin");
+        right_rx.readable().await?;
         let mut response_reader = BufReader::new(&mut right_rx);
         let mut response = response_reader.read_response().await.with_context(|| {
             format!(
