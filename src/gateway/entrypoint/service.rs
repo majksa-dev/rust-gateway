@@ -113,13 +113,14 @@ impl EntryPoint {
                     .await
                     .also(|_| debug!(target: "entrypoint", stage = "response", data = ?response, "3 - wrote response"))
                     .async_and_then(move |_| async move {
+                        left_tx.flush().await?;
                         let length = response.get_content_length();
                         if let Some(mut body) = response.body() {
                             body.copy_to(left_tx, length)
-                                .await
-                        } else {
-                            Ok(())
+                                .await?;
                         }
+                        left_tx.shutdown().await?;
+                        Ok(())
                     })
                     .await
                     .also(|r| debug!(target: "entrypoint", stage = "response", data = ?r, "4 - wrote response body"))
@@ -128,7 +129,10 @@ impl EntryPoint {
                 error!("{}", error);
                 left_tx
                     .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
-                    .await
+                    .await?;
+
+                left_tx.shutdown().await?;
+                Ok(())
             }
         }
     }

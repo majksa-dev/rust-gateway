@@ -5,7 +5,8 @@ use crate::{
 };
 use anyhow::Context;
 use async_trait::async_trait;
-use essentials::debug;
+use essentials::{debug, error};
+use futures::FutureExt;
 use http::StatusCode;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt, BufReader},
@@ -38,6 +39,10 @@ impl OriginServer for Origin {
             .write_request(&request)
             .await
             .with_context(|| format!("Failed to send request to origin: {:?}", request))?;
+        right_tx
+            .flush()
+            .await
+            .with_context(|| "Failed to flush request to origin".to_string())?;
         debug!("Request sent to origin: {:?}", request);
         let request_body_size = request.get_content_length().map(|v| v - left_remains.len());
         right_tx
@@ -46,21 +51,26 @@ impl OriginServer for Origin {
             .with_context(|| format!("Failed to send remains to origin: {:?}", left_remains))?;
         debug!("Remains sent to origin: {:?}", left_remains);
         #[cfg(feature = "tls")]
-        tokio::spawn(async move {
+        let request_forward = async move {
             if let Some(size) = request_body_size {
-                tokio::io::copy(&mut left_rx.take(size as u64), &mut right_tx)
-                    .await
-                    .unwrap();
+                tokio::io::copy(&mut left_rx.take(size as u64), &mut right_tx).await?;
             } else {
-                tokio::io::copy(&mut left_rx, &mut right_tx).await.unwrap();
+                tokio::io::copy(&mut left_rx, &mut right_tx).await?;
             }
-        });
+            right_tx.shutdown().await?;
+            Ok::<(), std::io::Error>(())
+        };
         #[cfg(not(feature = "tls"))]
-        tokio::spawn(async move {
-            ::io::copy_tcp(&mut left_rx, &mut right_tx, request_size)
-                .await
-                .unwrap();
-        });
+        let request_forward = async move {
+            ::io::copy_tcp(&mut left_rx, &mut right_tx, request_size).await?;
+            right_tx.shutdown().await?;
+            Ok::<(), std::io::Error>(())
+        };
+        tokio::spawn(request_forward.then(|r| async {
+            if let Err(error) = r {
+                error!(?error, "Failed to forward request to origin");
+            }
+        }));
         debug!("Body sent to origin");
         let mut response_reader = BufReader::new(&mut right_rx);
         let mut response = response_reader.read_response().await.with_context(|| {
