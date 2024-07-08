@@ -118,7 +118,11 @@
 //!         Ok(String::from_utf8(buf).unwrap())
 //!     }
 //!
-//!     async fn copy_to<'a>(&mut self, writer: &'a mut OwnedWriteHalf, _length: Option<usize>) -> io::Result<()> {
+//!     async fn copy_to<'a>(
+//!         &mut self,
+//!         writer: &'a mut OwnedWriteHalf,
+//!         _length: Option<usize>
+//!     ) -> io::Result<()> {
 //!         println!("copying response to client");
 //!         ::io::copy_file(&mut self.file, writer).await?;
 //!         Ok(())
