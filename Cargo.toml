@@ -16,7 +16,7 @@ tls = ["dep:tokio-rustls"]
 [dependencies]
 essentials = { tag = "0.3.6", git = "https://github.com/majksa-dev/rust-essentials", features = ["all"]}
 io = { tag = "0.3.0", git = "https://github.com/majksa-dev/rust-io" }
-async-trait = "0.1.77"
+async-trait = "0.1.81"
 structopt = "0.3.26"
 tokio = { version = "1", features = ["full"] }
 http = "1.1.0"
