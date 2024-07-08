@@ -98,11 +98,8 @@ where
     R: AsyncBufRead + ?Sized + Unpin + Send,
 {
     async fn read_response(&mut self) -> io::Result<Response> {
-        let status_line = self
-            .lines()
-            .next_line()
-            .await?
-            .ok_or(error(ResponseStatusLine::MissingStatusLine))?;
+        let mut status_line = String::new();
+        self.read_line(&mut status_line).await?;
         let (version, status) = {
             let mut parts = status_line.split_whitespace();
             (

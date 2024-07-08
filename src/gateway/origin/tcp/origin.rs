@@ -11,7 +11,7 @@ use http::StatusCode;
 #[cfg(feature = "tls")]
 use tokio::io::AsyncReadExt;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncWriteExt, BufReader},
     net::TcpStream,
 };
 
