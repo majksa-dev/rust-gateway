@@ -30,7 +30,7 @@ impl ResponseBody for OriginResponse {
         #[cfg(feature = "tls")]
         tokio::io::copy(&mut self.reader, writer).await?;
         #[cfg(not(feature = "tls"))]
-        ::io::copy_tcp(&mut self.reader, writer).await?;
+        ::io::copy_tcp(&mut self.reader, writer, None).await?;
         Ok(())
     }
 }

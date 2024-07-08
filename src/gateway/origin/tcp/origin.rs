@@ -46,11 +46,11 @@ impl OriginServer for Origin {
         debug!("Remains sent to origin: {:?}", left_remains);
         #[cfg(feature = "tls")]
         tokio::spawn(async move {
-            tokio::io::copy(&mut left_rx, &mut right_tx).await.unwrap();
+            tokio::io::copy(&mut left_rx, &mut right_tx, None).await.unwrap();
         });
         #[cfg(not(feature = "tls"))]
         tokio::spawn(async move {
-            ::io::copy_tcp(&mut left_rx, &mut right_tx).await.unwrap();
+            ::io::copy_tcp(&mut left_rx, &mut right_tx, None).await.unwrap();
         });
         debug!("Body sent to origin");
         let mut response_reader = BufReader::new(&mut right_rx);
