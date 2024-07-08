@@ -8,8 +8,10 @@ use async_trait::async_trait;
 use essentials::{debug, error};
 use futures::FutureExt;
 use http::StatusCode;
+#[cfg(feature = "tls")]
+use tokio::io::AsyncReadExt;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt, BufReader},
+    io::{AsyncWriteExt, BufReader},
     net::TcpStream,
 };
 
@@ -62,7 +64,7 @@ impl OriginServer for Origin {
         };
         #[cfg(not(feature = "tls"))]
         let request_forward = async move {
-            ::io::copy_tcp(&mut left_rx, &mut right_tx, request_size).await?;
+            ::io::copy_tcp(&mut left_rx, &mut right_tx, request_body_size).await?;
             right_tx.shutdown().await?;
             Ok::<(), std::io::Error>(())
         };
