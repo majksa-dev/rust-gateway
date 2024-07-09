@@ -1,9 +1,13 @@
-use super::{headers::HeaderMapExt, stream::WriteHalf, ReadHeaders, WriteHeaders};
+use super::{headers::HeaderMapExt, stream::WriteHalf, WriteHeaders};
 use crate::io::error::{error, ResponseStatusLine};
 use async_trait::async_trait;
+use essentials::debug;
 use http::{header, HeaderMap, HeaderValue, StatusCode};
-use std::fmt::Debug;
-use tokio::io::{self, AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
+use std::{fmt::Debug, io::ErrorKind, time::Duration};
+use tokio::{
+    io::{self, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
+    time::sleep,
+};
 
 #[derive(Debug)]
 pub struct Response {
@@ -89,37 +93,70 @@ where
 
 #[async_trait]
 pub trait ReadResponse {
-    async fn read_response(&mut self) -> io::Result<Response>;
+    async fn read_response(&mut self) -> io::Result<(Response, Box<[u8]>)>;
 }
 
 #[async_trait]
 impl<R> ReadResponse for R
 where
-    R: AsyncBufRead + ?Sized + Unpin + Send,
+    R: AsyncRead + ?Sized + Unpin + Send,
 {
-    async fn read_response(&mut self) -> io::Result<Response> {
-        let mut status_line = String::new();
-        self.read_line(&mut status_line).await?;
-        let (version, status) = {
-            let mut parts = status_line.split_whitespace();
-            (
-                parts
-                    .next()
-                    .ok_or(error(ResponseStatusLine::MissingVersion))?
-                    .to_string(),
-                parts
-                    .next()
-                    .ok_or(error(ResponseStatusLine::MissingStatus))?
-                    .to_string(),
-            )
-        };
-        Ok(Response {
-            version,
-            status: status
-                .parse()
-                .map_err(|_| error(ResponseStatusLine::InvalidStatus))?,
-            headers: self.read_headers().await?,
-            body: None,
-        })
+    async fn read_response(&mut self) -> io::Result<(Response, Box<[u8]>)> {
+        let mut buf = [0_u8; 256];
+        let mut timeout = Duration::from_micros(100);
+        let mut line = String::new();
+        let mut response = Option::<Response>::None;
+        loop {
+            let read = match self.read(&mut buf).await {
+                Ok(n) => Ok(n),
+                Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(0),
+                Err(e) => Err(e),
+            }?;
+            if read == 0 {
+                debug!(?response, ?timeout, line, "sleeping");
+                sleep(timeout).await;
+                timeout *= 2;
+                continue;
+            }
+            let mut it = buf.iter().copied().peekable();
+            while let Some(c) = it.next() {
+                if c == b'\r' && it.peek().is_some_and(|c| *c == b'\n') {
+                    it.next();
+                    if line.is_empty() {
+                        if let Some(response) = response {
+                            return Ok((response, it.collect()));
+                        } else {
+                            return Err(io::Error::new(
+                                ErrorKind::InvalidData,
+                                "response line is empty",
+                            ));
+                        }
+                    }
+                    if let Some(response) = response.as_mut() {
+                        response.parse_header(line)?;
+                        line = String::new();
+                    } else {
+                        let mut parts = line.split_whitespace();
+                        response = Some(Response {
+                            version: parts
+                                .next()
+                                .ok_or(error(ResponseStatusLine::MissingVersion))?
+                                .to_string(),
+                            status: parts
+                                .next()
+                                .ok_or(error(ResponseStatusLine::MissingStatus))?
+                                .to_string()
+                                .parse()
+                                .map_err(|_| error(ResponseStatusLine::InvalidStatus))?,
+                            headers: HeaderMap::new(),
+                            body: None,
+                        });
+                        line = String::new();
+                    }
+                } else {
+                    line.push(c as char);
+                }
+            }
+        }
     }
 }

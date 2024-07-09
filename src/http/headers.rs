@@ -1,7 +1,7 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, io::ErrorKind, str::FromStr};
 
 use async_trait::async_trait;
-use essentials::warn;
+use essentials::{debug, warn};
 use http::{
     header::{AsHeaderName, GetAll, IntoHeaderName},
     HeaderMap, HeaderName, HeaderValue,
@@ -84,6 +84,20 @@ pub trait HeaderMapExt {
             .ok()?
             .parse::<usize>()
             .ok()
+    }
+
+    fn parse_header(&mut self, header: String) -> io::Result<()> {
+        debug!(?header, "Parsing header");
+        let i = header.find(':').ok_or_else(|| {
+            io::Error::new(ErrorKind::InvalidData, "Failed to find ':' in header line.")
+        })?;
+        let (key, value) = header.split_at(i);
+        let key = HeaderName::from_str(key.trim())
+            .map_err(|_| io::Error::new(ErrorKind::InvalidData, "Invalid header key"))?;
+        let value = HeaderValue::from_str(value[1..].trim())
+            .map_err(|_| io::Error::new(ErrorKind::InvalidData, "Invalid header value"))?;
+        self.headers_mut().append(key, value);
+        Ok(())
     }
 
     fn insert_header(

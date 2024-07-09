@@ -7,7 +7,7 @@ use tokio::{
 
 #[derive(Debug)]
 pub struct OriginResponse {
-    pub remains: Vec<u8>,
+    pub remains: Box<[u8]>,
     pub reader: OwnedReadHalf,
 }
 
@@ -16,7 +16,10 @@ impl ResponseBody for OriginResponse {
     async fn read_all(mut self: Box<Self>, len: usize) -> io::Result<String> {
         let mut buf = String::with_capacity(len);
         let remains_len = self.remains.len();
-        buf.push_str(String::from_utf8(self.remains).unwrap().as_str());
+        buf.push_str(
+            std::str::from_utf8(&self.remains)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
+        );
         unsafe {
             self.reader
                 .read_exact(&mut buf.as_bytes_mut()[remains_len..])
@@ -31,7 +34,7 @@ impl ResponseBody for OriginResponse {
         #[cfg(not(feature = "tls"))] length: Option<usize>,
         #[cfg(feature = "tls")] _length: Option<usize>,
     ) -> io::Result<()> {
-        writer.write_all(self.remains.as_slice()).await?;
+        writer.write_all(&self.remains).await?;
         #[cfg(feature = "tls")]
         tokio::io::copy(&mut self.reader, writer).await?;
         #[cfg(not(feature = "tls"))]

@@ -10,10 +10,7 @@ use futures::FutureExt;
 use http::StatusCode;
 #[cfg(feature = "tls")]
 use tokio::io::AsyncReadExt;
-use tokio::{
-    io::{AsyncWriteExt, BufReader},
-    net::TcpStream,
-};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 pub struct Origin(pub super::Context);
 
@@ -75,14 +72,12 @@ impl OriginServer for Origin {
         }));
         debug!("Body sent to origin");
         right_rx.readable().await?;
-        let mut response_reader = BufReader::new(&mut right_rx);
-        let mut response = response_reader.read_response().await.with_context(|| {
-            format!(
-                "Failed to read response from origin: {:?}",
-                response_reader.buffer()
-            )
-        })?;
-        let right_remains = response_reader.buffer().to_vec();
+        debug!("Origin response received");
+        let (mut response, right_remains) = right_rx
+            .read_response()
+            .await
+            .with_context(|| "Failed to read response from origin:")?;
+        debug!("Response received from origin: {:?}", response);
         response.set_body(OriginResponse {
             remains: right_remains,
             reader: right_rx,
