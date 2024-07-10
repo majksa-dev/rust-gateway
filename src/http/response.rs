@@ -103,22 +103,37 @@ where
 {
     async fn read_response(&mut self) -> io::Result<(Response, Box<[u8]>)> {
         let mut buf = [0_u8; 256];
+        let mut buf_idx = 0;
         let mut timeout = Duration::from_micros(100);
         let mut line = String::new();
         let mut response = Option::<Response>::None;
         loop {
-            let read = match self.read(&mut buf).await {
-                Ok(n) => Ok(n),
-                Err(e) if e.kind() == ErrorKind::WouldBlock => Ok(0),
-                Err(e) => Err(e),
-            }?;
+            buf[buf_idx] = match self.read_u8().await {
+                Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
+                    continue;
+                }
+                result => result?,
+            };
+            buf_idx += 1;
+            let read = if buf_idx == 256 {
+                buf_idx = 0;
+                256
+            } else {
+                match self.read(&mut buf[buf_idx..]).await {
+                    Ok(n) => Ok(buf_idx + n),
+                    Err(e) if e.kind() == ErrorKind::WouldBlock => {
+                        continue;
+                    }
+                    Err(e) => Err(e),
+                }?
+            };
             if read == 0 {
                 debug!(?response, ?timeout, line, "sleeping");
                 sleep(timeout).await;
                 timeout *= 2;
                 continue;
             }
-            let mut it = buf.iter().copied().peekable();
+            let mut it = buf.iter().take(read).copied().peekable();
             while let Some(c) = it.next() {
                 if c == b'\r' && it.peek().is_some_and(|c| *c == b'\n') {
                     it.next();

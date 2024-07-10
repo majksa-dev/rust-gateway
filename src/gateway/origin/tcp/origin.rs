@@ -6,11 +6,10 @@ use crate::{
 use anyhow::Context;
 use async_trait::async_trait;
 use essentials::{debug, error};
-use futures::FutureExt;
 use http::StatusCode;
 #[cfg(feature = "tls")]
 use tokio::io::AsyncReadExt;
-use tokio::{io::AsyncWriteExt, net::TcpStream};
+use tokio::{io::AsyncWriteExt, net::TcpStream, spawn};
 
 pub struct Origin(pub super::Context);
 
@@ -43,33 +42,23 @@ impl OriginServer for Origin {
             .await
             .with_context(|| "Failed to flush request to origin".to_string())?;
         debug!("Request sent to origin: {:?}", request);
-        let request_body_size = request.get_content_length().map(|v| v - left_remains.len());
         right_tx
             .write_all(left_remains.as_slice())
             .await
             .with_context(|| format!("Failed to send remains to origin: {:?}", left_remains))?;
         debug!("Remains sent to origin: {:?}", left_remains);
-        #[cfg(feature = "tls")]
-        let request_forward = async move {
-            if let Some(size) = request_body_size {
-                tokio::io::copy(&mut left_rx.take(size as u64), &mut right_tx).await?;
-            } else {
-                tokio::io::copy(&mut left_rx, &mut right_tx).await?;
+        match request.get_content_length().map(|v| v - left_remains.len()) {
+            Some(size) => {
+                ::io::copy_tcp(&mut left_rx, &mut right_tx, Some(size)).await?;
             }
-            right_tx.shutdown().await?;
-            Ok::<(), std::io::Error>(())
-        };
-        #[cfg(not(feature = "tls"))]
-        let request_forward = async move {
-            ::io::copy_tcp(&mut left_rx, &mut right_tx, request_body_size).await?;
-            right_tx.shutdown().await?;
-            Ok::<(), std::io::Error>(())
-        };
-        tokio::spawn(request_forward.then(|r| async {
-            if let Err(error) = r {
-                error!(?error, "Failed to forward request to origin");
+            None => {
+                spawn(async move {
+                    if let Err(err) = tokio::io::copy(&mut left_rx, &mut right_tx).await {
+                        error!(?err, "failed forwarding request body to origin");
+                    }
+                });
             }
-        }));
+        };
         debug!("Body sent to origin");
         right_rx.readable().await?;
         debug!("Origin response received");
