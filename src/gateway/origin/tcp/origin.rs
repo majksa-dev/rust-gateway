@@ -49,7 +49,10 @@ impl OriginServer for Origin {
         debug!("Remains sent to origin: {:?}", left_remains);
         match request.get_content_length().map(|v| v - left_remains.len()) {
             Some(size) => {
+                #[cfg(not(feature = "tls"))]
                 ::io::copy_tcp(&mut left_rx, &mut right_tx, Some(size)).await?;
+                #[cfg(feature = "tls")]
+                tokio::io::copy(&mut left_rx.take(size), &mut right_tx).await?;
             }
             None => {
                 spawn(async move {
