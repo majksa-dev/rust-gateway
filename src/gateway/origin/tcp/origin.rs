@@ -52,7 +52,7 @@ impl OriginServer for Origin {
                 #[cfg(not(feature = "tls"))]
                 ::io::copy_tcp(&mut left_rx, &mut right_tx, Some(size)).await?;
                 #[cfg(feature = "tls")]
-                tokio::io::copy(&mut left_rx.take(size), &mut right_tx).await?;
+                tokio::io::copy(&mut left_rx.take(size as u64), &mut right_tx).await?;
             }
             None => {
                 spawn(async move {
