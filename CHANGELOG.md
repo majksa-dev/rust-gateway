@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.3](https://github.com/majksa-dev/rust-gateway/compare/v0.6.2...v0.6.3) (2024-07-10)
+
+
+### Bug Fixes
+
+* convert take input arg to u64 ([b8129da](https://github.com/majksa-dev/rust-gateway/commit/b8129da48dad9da68f12d4977a7c3a7bc2b277cb))
+* **deps:** bump async-trait from 0.1.80 to 0.1.81 ([fe1b544](https://github.com/majksa-dev/rust-gateway/commit/fe1b5447e38bf0e3e7c2a9a45a5f9ca9ef539af6))
+* **deps:** bump io from 0.2.2 to 0.3.0 ([d24d9f0](https://github.com/majksa-dev/rust-gateway/commit/d24d9f0ded9dfd32628ea2cf4aa13713a04394bd))
+* **deps:** bump serde from 1.0.203 to 1.0.204 ([54d774e](https://github.com/majksa-dev/rust-gateway/commit/54d774ecafee49048f22ccaa1d486bec45ff7213))
+* flush after writing ([dd22eb1](https://github.com/majksa-dev/rust-gateway/commit/dd22eb18f9704242a232216bce9b120b43dfeda8))
+* improve zero copy tcp ([0dada80](https://github.com/majksa-dev/rust-gateway/commit/0dada8098371814a0cdb631214470304dc6c6d1b))
+* limit input body ([430666c](https://github.com/majksa-dev/rust-gateway/commit/430666c5436eac50b76781582214050e53775455))
+* remove buffering when reading response ([8df4e45](https://github.com/majksa-dev/rust-gateway/commit/8df4e4529c261d4f5be3ef3c3b9309e6f36f3ec2))
+* use more reliable status line reader ([6f1dfcd](https://github.com/majksa-dev/rust-gateway/commit/6f1dfcd777ddfa2804b652c439f0b2dee93f000c))
+* wait for response from origin server ([404c1a8](https://github.com/majksa-dev/rust-gateway/commit/404c1a858f73bc6c01778bae5a996902558f3b4c))
+
 ## [0.6.2](https://github.com/majksa-dev/rust-gateway/compare/v0.6.1...v0.6.2) (2024-07-04)
 
 
