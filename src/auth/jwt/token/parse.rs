@@ -30,7 +30,7 @@ mod test {
     use pretty_assertions::assert_eq;
     use serde_json::json;
 
-    use crate::auth::jwt::token::ClaimParser;
+    use crate::auth::ClaimParser;
 
     use super::*;
 
