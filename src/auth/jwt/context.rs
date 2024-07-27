@@ -1,8 +1,8 @@
-use crate::ConfigToContext;
+use crate::{auth::ClaimParser, ConfigToContext};
 
 use super::{
     config,
-    token::{self, fetch_keys, Algorithm, ClaimParser, Validation},
+    token::{self, fetch_keys, Algorithm, Validation},
 };
 use anyhow::Result;
 use async_trait::async_trait;
