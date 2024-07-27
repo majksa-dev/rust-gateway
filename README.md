@@ -16,9 +16,9 @@ To use `gateway`, add the following to your Cargo.toml:
 
 ```toml
 [dependencies]
-gateway = { tag = "v0.6.3", git = "https://github.com/majksa-dev/rust-gateway" }
+gateway = { tag = "v0.6.4", git = "https://github.com/majksa-dev/rust-gateway" }
 ```
 
-or simply run `cargo add --git https://github.com/majksa-dev/rust-gateway --tag v0.6.3`
+or simply run `cargo add --git https://github.com/majksa-dev/rust-gateway --tag v0.6.4`
 
 <!-- x-release-please-end -->

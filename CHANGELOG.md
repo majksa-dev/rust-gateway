@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.4](https://github.com/majksa-dev/rust-gateway/compare/v0.6.3...v0.6.4) (2024-07-27)
+
+
+### Bug Fixes
+
+* **deps:** bump pingora-cache from 0.2.0 to 0.3.0 ([8c46067](https://github.com/majksa-dev/rust-gateway/commit/8c46067d4101601f9373f766f7793c03501312d0))
+* **deps:** bump tokio from 1.38.0 to 1.39.2 ([15b31ab](https://github.com/majksa-dev/rust-gateway/commit/15b31abc44580ba9ceaa0c015ba8e7764c555ec9))
+* **deps:** bump wiremock from 0.6.0 to 0.6.1 ([e94befa](https://github.com/majksa-dev/rust-gateway/commit/e94befa30751b38c5d4fadc746a01d1c84261013))
+* tls server special cases ([ad833e6](https://github.com/majksa-dev/rust-gateway/commit/ad833e636fed063c0a8ee07575c7145ed93776f9))
+
 ## [0.6.3](https://github.com/majksa-dev/rust-gateway/compare/v0.6.2...v0.6.3) (2024-07-10)
 
 
