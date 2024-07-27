@@ -32,8 +32,13 @@ impl ResponseBody for OriginResponse {
         &mut self,
         writer: &'a mut WriteHalf,
         #[cfg(not(feature = "tls"))] length: Option<usize>,
-        #[cfg(feature = "tls")] _length: Option<usize>,
+        #[cfg(feature = "tls")] length: Option<usize>,
     ) -> io::Result<()> {
+        if let Some(length) = length {
+            if length == 0 {
+                return Ok(());
+            }
+        }
         writer.write_all(&self.remains).await?;
         #[cfg(feature = "tls")]
         tokio::io::copy(&mut self.reader, writer).await?;

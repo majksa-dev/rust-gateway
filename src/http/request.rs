@@ -14,7 +14,7 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new(&self, path: String, method: Method) -> Self {
+    pub fn new(path: String, method: Method) -> Self {
         Self {
             path,
             method,
