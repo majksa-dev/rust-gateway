@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/majksa-dev/rust-gateway/compare/v0.6.4...v0.7.0) (2024-07-28)
+
+
+### Features
+
+* **auth:** add endpoints based authentication and authorization - e.g. for OIDC based providers (google, etc.) ([a1b73e0](https://github.com/majksa-dev/rust-gateway/commit/a1b73e0a533f5ec37b1a3cddac51bd9232892a1b))
+
 ## [0.6.4](https://github.com/majksa-dev/rust-gateway/compare/v0.6.3...v0.6.4) (2024-07-27)
 
 
