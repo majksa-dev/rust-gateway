@@ -13,8 +13,8 @@ impl RegexRouterBuilder {
         Self::default()
     }
 
-    pub fn add_route(&mut self, method: Method, regex: Regex, app_id: String) {
-        self.routes.push((method, regex, app_id));
+    pub fn add_route(&mut self, method: Method, regex: Regex, endpoint_id: String) {
+        self.routes.push((method, regex, endpoint_id));
     }
 }
 

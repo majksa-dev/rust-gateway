@@ -14,8 +14,8 @@ impl ParamRouterBuilder {
         Self::default()
     }
 
-    pub fn add_route(mut self, method: Method, path: String, app_id: String) -> Self {
-        self.routes.push((method, path, app_id));
+    pub fn add_route(mut self, method: Method, path: String, endpoint_id: String) -> Self {
+        self.routes.push((method, path, endpoint_id));
         self
     }
 }
