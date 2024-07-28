@@ -1,12 +1,25 @@
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Ok, Result};
 use serde_json::Value;
 
 pub trait ClaimParser {
     fn parse(&self, path: &str) -> Result<String>;
+
+    fn parse_value(&self, path: &str) -> Result<&Value>;
 }
 
 impl ClaimParser for Value {
     fn parse(&self, path: &str) -> Result<String> {
+        match self.parse_value(path)? {
+            Value::Null => bail!("Null value at key '{}'", path),
+            Value::Bool(bool) => Ok(bool.to_string()),
+            Value::Number(number) => Ok(number.to_string()),
+            Value::String(string) => Ok(string.clone()),
+            Value::Array(_) => bail!("Array value at key '{}'", path),
+            Value::Object(_) => bail!("Object value at key '{}'", path),
+        }
+    }
+
+    fn parse_value(&self, path: &str) -> Result<&Value> {
         match path.split_once('.') {
             Some((key, path)) => match self {
                 Value::Object(map) => {
@@ -14,7 +27,7 @@ impl ClaimParser for Value {
                         .get(key)
                         .ok_or_else(|| anyhow!("Expected key '{}' not found in {:?}", key, self))?;
                     value
-                        .parse(path)
+                        .parse_value(path)
                         .with_context(|| format!("at key '{}'", key))
                 }
                 _ => Err(anyhow!("Expected object but found {:?}", self)),
@@ -22,15 +35,7 @@ impl ClaimParser for Value {
             None => match self {
                 Value::Object(map) => map
                     .get(path)
-                    .ok_or_else(|| anyhow!("Expected key '{}' not found in {:?}", path, self))
-                    .and_then(|value| match value {
-                        Value::Null => bail!("Null value at key '{}'", path),
-                        Value::Bool(bool) => Ok(bool.to_string()),
-                        Value::Number(number) => Ok(number.to_string()),
-                        Value::String(string) => Ok(string.clone()),
-                        Value::Array(_) => bail!("Array value at key '{}'", path),
-                        Value::Object(_) => bail!("Object value at key '{}'", path),
-                    }),
+                    .ok_or_else(|| anyhow!("Expected key '{}' not found in {:?}", path, self)),
                 _ => Err(anyhow!("Expected object but found {:?}", self)),
             },
         }
