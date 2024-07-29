@@ -6,7 +6,7 @@ use crate::{
 use anyhow::Context;
 use async_trait::async_trait;
 use essentials::{debug, error};
-use http::StatusCode;
+use http::{header, StatusCode};
 #[cfg(feature = "tls")]
 use tokio::io::AsyncReadExt;
 use tokio::{io::AsyncWriteExt, net::TcpStream, spawn};
@@ -18,21 +18,22 @@ impl OriginServer for Origin {
     async fn connect(
         &self,
         context: &Ctx,
-        request: Request,
+        mut request: Request,
         mut left_rx: ReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<Response> {
-        let addr = match self.0.get(context.app_id) {
-            Some(addr) => addr.global().clone(),
+        let connection = match self.0.get(context.app_id) {
+            Some(addr) => addr.global(),
             None => {
                 return Ok(Response::new(StatusCode::NOT_FOUND));
             }
         };
-        let right = TcpStream::connect(addr.to_string())
+        let right = TcpStream::connect(connection.addr.to_string())
             .await
             .with_context(|| "Failed to connect to origin".to_string())?;
         let (mut right_rx, mut right_tx) = right.into_split();
         debug!("Connected to origin");
+        request.insert_header(header::HOST, &*connection.host);
         right_tx
             .write_request(&request)
             .await

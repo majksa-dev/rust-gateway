@@ -1,5 +1,6 @@
 mod builder;
 pub mod config;
+mod context;
 mod origin;
 mod response;
 
@@ -9,7 +10,7 @@ use origin::Origin;
 use crate::{MiddlewareConfig, MiddlewareCtx};
 use std::collections::HashMap;
 
-type Context = MiddlewareCtx<Box<str>, ()>;
+type Context = MiddlewareCtx<context::Connection, ()>;
 type Config = MiddlewareConfig<config::Connection, ()>;
 
 #[derive(Debug, Default)]

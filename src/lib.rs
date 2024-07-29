@@ -158,7 +158,10 @@
 //!         tcp::Builder::new()
 //!             .add_peer(
 //!                 "",
-//!                 tcp::config::Connection::new("127.0.0.1:81".parse().unwrap()),
+//!                 tcp::config::Connection::new(
+//!                     "127.0.0.1:81".parse().unwrap(),
+//!                     "localhost".to_string(),
+//!                 ),
 //!             )
 //!             .build(),
 //!         |_| Some(String::new()),
