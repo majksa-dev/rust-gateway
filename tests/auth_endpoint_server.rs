@@ -31,6 +31,19 @@ mod tests {
     }
 
     #[utils::test(setup = before_each, teardown = after_each)]
+    async fn should_return_email_when_calling_secret_endpoint_with_permissions(ctx: Context) {
+        let response = surf::get(format!("http://127.0.0.1:{}/secret", &ctx.app))
+            .header("Host", "app")
+            .header("Authorization", "Bearer hello_world")
+            .await;
+        debug!("{:?}", response);
+        let mut response = response.unwrap();
+        let status = response.status();
+        assert_eq!(status, StatusCode::Ok);
+        assert_eq!(response.body_string().await.unwrap(), "john@doe.com");
+    }
+
+    #[utils::test(setup = before_each, teardown = after_each)]
     async fn should_return_401_when_no_token_is_attached(ctx: Context) {
         let response = surf::get(format!("http://127.0.0.1:{}/hello", &ctx.app))
             .header("Host", "app")
@@ -135,6 +148,16 @@ mod tests {
                 .respond_with(RespondWithEmailHeader)
                 .mount(&server)
                 .await;
+            Mock::given(method("GET"))
+                .and(path("/secret"))
+                .respond_with(RespondWithEmailHeader)
+                .mount(&server)
+                .await;
+            Mock::given(method("GET"))
+                .and(path("/private"))
+                .respond_with(RespondWithEmailHeader)
+                .mount(&server)
+                .await;
             (server, mock_addr.to_string())
         };
         let user_info_server = {
@@ -193,12 +216,13 @@ mod tests {
                             }),
                         ),
                     )
+                    .require_app_roles("app", vec!["ROLE1".to_string()])
                     .set_app_endpoints(
                         "app",
                         auth::endpoint::EndpointBuilder::new()
                             .add_endpoint(
                                 "secret",
-                                auth::endpoint::config::Endpoint::new(vec!["ROLE1".to_string()]),
+                                auth::endpoint::config::Endpoint::new(vec!["ROLE2".to_string()]),
                             )
                             .add_endpoint(
                                 "private",
