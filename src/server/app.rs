@@ -16,7 +16,8 @@ use std::net::{IpAddr, SocketAddr};
 
 use super::health_check::HealthCheck;
 
-pub(crate) type GenerateKey = dyn (Fn(&Request) -> Option<String>) + Send + Sync + 'static;
+pub(crate) type GenerateKey =
+    dyn (Fn(&Request) -> Option<(String, Option<String>)>) + Send + Sync + 'static;
 
 /// A builder for a server.
 pub struct ServerBuilder {
@@ -205,7 +206,7 @@ impl Server {
 /// Create a new server builder with a default health check.
 pub fn builder<F, O>(origin: O, generate_peer_key: F) -> ServerBuilder
 where
-    F: Fn(&Request) -> Option<String> + Send + Sync + 'static,
+    F: Fn(&Request) -> Option<(String, Option<String>)> + Send + Sync + 'static,
     O: OriginServerBuilder + Send + Sync + 'static,
 {
     ServerBuilder::new(Box::new(generate_peer_key), Box::new(origin))

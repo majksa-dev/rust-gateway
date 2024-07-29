@@ -6,11 +6,11 @@ use super::config;
 #[derive(Debug)]
 pub struct Connection {
     pub addr: Box<str>,
-    pub host: Box<str>,
+    pub host: Option<Box<str>>,
 }
 
 impl Connection {
-    pub fn new(addr: Box<str>, host: Box<str>) -> Self {
+    pub fn new(addr: Box<str>, host: Option<Box<str>>) -> Self {
         Self { addr, host }
     }
 }

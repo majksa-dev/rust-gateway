@@ -113,16 +113,13 @@ async fn create_server(
     let custom_ports = ports[2..].to_vec();
     let server_builder = gateway::builder(
         tcp::Builder::new()
-            .add_peer(
-                "app",
-                tcp::config::Connection::new(origin_addr, "localhost".to_string()),
-            )
+            .add_peer("app", tcp::config::Connection::new(origin_addr))
             .build(),
         |request| {
             request
                 .header(header::HOST)
                 .and_then(|value| value.to_str().ok())
-                .map(|x| x.to_string())
+                .map(|x| (x.to_string(), None))
         },
     )
     .with_app_port(ports[0])

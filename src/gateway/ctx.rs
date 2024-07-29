@@ -57,6 +57,18 @@ impl<I: Send> ConfigToContext for Vec<I> {
 }
 
 #[async_trait]
+impl<I: ConfigToContext + Send> ConfigToContext for Option<I> {
+    type Context = Option<I::Context>;
+
+    async fn into_context(self) -> Result<Self::Context> {
+        match self {
+            Some(i) => Ok(Some(i.into_context().await?)),
+            None => Ok(None),
+        }
+    }
+}
+
+#[async_trait]
 impl ConfigToContext for String {
     type Context = Box<str>;
 

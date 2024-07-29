@@ -33,7 +33,9 @@ impl OriginServer for Origin {
             .with_context(|| "Failed to connect to origin".to_string())?;
         let (mut right_rx, mut right_tx) = right.into_split();
         debug!("Connected to origin");
-        request.insert_header(header::HOST, &*connection.host);
+        if let Some(host) = connection.host.as_deref() {
+            request.insert_header(header::HOST, host);
+        }
         right_tx
             .write_request(&request)
             .await

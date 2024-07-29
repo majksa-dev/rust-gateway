@@ -139,11 +139,11 @@ impl EntryPoint {
 
     async fn handle_request(
         &self,
-        request: Request,
+        mut request: Request,
         left_rx: ReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<Response> {
-        let app_id = match (self.generate_peer_key)(&request) {
+        let (app_id, host) = match (self.generate_peer_key)(&request) {
             Some(app) => app,
             None => {
                 warn!("Request could not be matched to an app ID");
@@ -151,6 +151,11 @@ impl EntryPoint {
             }
         };
         debug!("App ID: {}", app_id);
+        if let Some(host) = host {
+            request.insert_header(header::HOST, host);
+        } else {
+            request.remove_header(header::HOST);
+        }
         let (app_id, app) = match self.peers.get(&app_id) {
             Some(app) => app,
             None => {

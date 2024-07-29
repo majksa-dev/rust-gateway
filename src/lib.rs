@@ -138,7 +138,7 @@
 //!     essentials::install();
 //!     info!("Starting gateway");
 //!     tokio::spawn(
-//!         gateway::builder(FileServerBuilder::new(), |_| Some(String::new()))
+//!         gateway::builder(FileServerBuilder::new(), |_| Some((String::new(), None)))
 //!             .register_peer(
 //!                 String::new(),
 //!                 ParamRouterBuilder::new().add_route(
@@ -158,13 +158,10 @@
 //!         tcp::Builder::new()
 //!             .add_peer(
 //!                 "",
-//!                 tcp::config::Connection::new(
-//!                     "127.0.0.1:81".parse().unwrap(),
-//!                     "localhost".to_string(),
-//!                 ),
+//!                 tcp::config::Connection::new("127.0.0.1:81".parse().unwrap()),
 //!             )
 //!             .build(),
-//!         |_| Some(String::new()),
+//!         |_| Some((String::new(), None)),
 //!     );
 //!     server_builder = server_builder.register_peer(
 //!         String::new(),
