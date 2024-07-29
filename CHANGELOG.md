@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/majksa-dev/rust-gateway/compare/v0.7.0...v0.8.0) (2024-07-29)
+
+
+### Features
+
+* override host header in tcp process ([2697d07](https://github.com/majksa-dev/rust-gateway/commit/2697d07652b7af3d507158ba89a2d1fe3a536b01))
+
 ## [0.7.0](https://github.com/majksa-dev/rust-gateway/compare/v0.6.4...v0.7.0) (2024-07-28)
 
 
