@@ -83,7 +83,11 @@ async fn create_origin_server() -> (MockServer, String) {
     let server = MockServer::builder().listener(listener).start().await;
     Mock::given(method("GET"))
         .and(path("/hello"))
-        .respond_with(ResponseTemplate::new(200).set_body_string("Hello, world!"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_string("Hello, world!")
+                .append_header("X-Custom", "unique"),
+        )
         .mount(&server)
         .await;
     Mock::given(method("GET"))
