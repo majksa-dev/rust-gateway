@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.8.1](https://github.com/majksa-dev/rust-gateway/compare/v0.8.0...v0.8.1) (2024-07-29)
+
+
+### Bug Fixes
+
+* add any router ([bc27e8a](https://github.com/majksa-dev/rust-gateway/commit/bc27e8a5c2bc437543d8bc9f5c52c139e0bd4189))
+* allow dynamically and statically providing hosts ([0af3d76](https://github.com/majksa-dev/rust-gateway/commit/0af3d767b84a7e634b8fd5a11fc57ea1464b73f3))
+* **cache:** add endpoint custom header back ([4a80f6e](https://github.com/majksa-dev/rust-gateway/commit/4a80f6e9dec8981a2324079963e93bdabd1931d1))
+* **deps:** bump serde_json from 1.0.120 to 1.0.121 ([052011d](https://github.com/majksa-dev/rust-gateway/commit/052011da0a6e0cd9ab1d72976ecfd6659d6aeddd))
+
 ## [0.8.0](https://github.com/majksa-dev/rust-gateway/compare/v0.7.0...v0.8.0) (2024-07-29)
 
 
