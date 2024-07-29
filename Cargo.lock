@@ -1555,7 +1555,6 @@ dependencies = [
  "http 1.1.0",
  "io",
  "jsonwebtoken",
- "mock_instant",
  "pingora-cache",
  "pretty_assertions",
  "rcgen",
@@ -2565,12 +2564,6 @@ name = "mirai-annotations"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9be0862c1b3f26a88803c4a49de6889c10e608b3ee9344e6ef5b45fb37ad3d1"
-
-[[package]]
-name = "mock_instant"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdcebb6db83796481097dedc7747809243cc81d9ed83e6a938b76d4ea0b249cf"
 
 [[package]]
 name = "native-tls"
