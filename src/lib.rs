@@ -252,8 +252,8 @@ pub use gateway::{
     middleware::{Middleware, MiddlewareBuilder, Service},
     origin::{tcp, Origin, OriginBuilder, OriginResponse, OriginServer, OriginServerBuilder},
     router::{
-        ParamRouter, ParamRouterBuilder, RegexRouter, RegexRouterBuilder, Router, RouterBuilder,
-        RouterBuilderService, RouterService,
+        AnyRouter, AnyRouterBuilder, ParamRouter, ParamRouterBuilder, RegexRouter,
+        RegexRouterBuilder, Router, RouterBuilder, RouterBuilderService, RouterService,
     },
     Next, Result,
 };
