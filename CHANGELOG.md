@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.3](https://github.com/majksa-dev/rust-gateway/compare/v0.8.2...v0.8.3) (2024-08-09)
+
+
+### Bug Fixes
+
+* **deps:** bump bb8-redis from 0.15.0 to 0.16.0 ([5f2b898](https://github.com/majksa-dev/rust-gateway/commit/5f2b898b3c44c79d0458d45f5275abe895587c0a))
+* **deps:** bump the dependencies group with 3 updates ([052fa10](https://github.com/majksa-dev/rust-gateway/commit/052fa102ac64750c4774b97d154ba5c90736721a))
+
 ## [0.8.2](https://github.com/majksa-dev/rust-gateway/compare/v0.8.1...v0.8.2) (2024-07-30)
 
 
