@@ -16,5 +16,8 @@ updates:
       prefix-development: "build(deps-dev)"
     groups:
       dependencies:
+        update-types:
+          - minor
+          - major
         patterns:
           - "*"
