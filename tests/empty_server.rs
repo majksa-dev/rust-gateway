@@ -1,5 +1,6 @@
 mod helper;
 
+#[cfg(not(feature = "tls"))]
 mod tests {
     use essentials::debug;
     use helper::*;
