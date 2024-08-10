@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.6](https://github.com/majksa-dev/rust-gateway/compare/v0.8.5...v0.8.6) (2024-08-10)
+
+
+### Bug Fixes
+
+* copy only when content length is specified ([ce8d821](https://github.com/majksa-dev/rust-gateway/commit/ce8d8211d1030b1f24b2eaba70f65e323280a5ab))
+* improving error logging ([b909ea2](https://github.com/majksa-dev/rust-gateway/commit/b909ea2db5daedfa3f08edc21d9cb24bfb38b740))
+
 ## [0.8.5](https://github.com/majksa-dev/rust-gateway/compare/v0.8.4...v0.8.5) (2024-08-10)
 
 
