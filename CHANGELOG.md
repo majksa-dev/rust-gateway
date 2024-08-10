@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.8](https://github.com/majksa-dev/rust-gateway/compare/v0.8.7...v0.8.8) (2024-08-10)
+
+
+### Bug Fixes
+
+* endpoints collecting revert ([8bdb872](https://github.com/majksa-dev/rust-gateway/commit/8bdb87284925b4f03f9b8b20143551dc0456eaef))
+
 ## [0.8.7](https://github.com/majksa-dev/rust-gateway/compare/v0.8.6...v0.8.7) (2024-08-10)
 
 
