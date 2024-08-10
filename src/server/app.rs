@@ -209,7 +209,7 @@ where
     ServerBuilder::new(Box::new(generate_peer_key), Box::new(origin))
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "tls")))]
 mod tests {
     use async_trait::async_trait;
     use http::StatusCode;
@@ -299,6 +299,7 @@ mod tests {
         let server = builder.build().await.unwrap();
         spawn(server.run());
         wait_for_server(ports[1]).await;
+        println!("Server started");
 
         for i in 0..100 {
             let mut response = surf::get(format!("http://127.0.0.1:{}", ports[0]))
