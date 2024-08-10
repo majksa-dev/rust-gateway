@@ -5,11 +5,11 @@ use crate::{
 };
 use anyhow::Context;
 use async_trait::async_trait;
-use essentials::{debug, error};
+use essentials::debug;
 use http::{header, StatusCode};
 #[cfg(feature = "tls")]
 use tokio::io::AsyncReadExt;
-use tokio::{io::AsyncWriteExt, net::TcpStream, spawn};
+use tokio::{io::AsyncWriteExt, net::TcpStream};
 
 pub struct Origin(pub super::Context);
 
@@ -50,21 +50,12 @@ impl OriginServer for Origin {
             .await
             .with_context(|| format!("Failed to send remains to origin: {:?}", left_remains))?;
         debug!("Remains sent to origin: {:?}", left_remains);
-        match request.get_content_length().map(|v| v - left_remains.len()) {
-            Some(size) => {
-                if size > 0 {
-                    #[cfg(not(feature = "tls"))]
-                    ::io::copy_tcp(&mut left_rx, &mut right_tx, Some(size)).await?;
-                    #[cfg(feature = "tls")]
-                    tokio::io::copy(&mut left_rx.take(size as u64), &mut right_tx).await?;
-                }
-            }
-            None => {
-                spawn(async move {
-                    if let Err(err) = tokio::io::copy(&mut left_rx, &mut right_tx).await {
-                        error!(?err, "failed forwarding request body to origin");
-                    }
-                });
+        if let Some(size) = request.get_content_length().map(|v| v - left_remains.len()) {
+            if size > 0 {
+                #[cfg(not(feature = "tls"))]
+                ::io::copy_tcp(&mut left_rx, &mut right_tx, Some(size)).await?;
+                #[cfg(feature = "tls")]
+                tokio::io::copy(&mut left_rx.take(size as u64), &mut right_tx).await?;
             }
         };
         debug!("Body sent to origin");

@@ -31,19 +31,20 @@ impl ResponseBody for OriginResponse {
     async fn copy_to<'a>(
         &mut self,
         writer: &'a mut WriteHalf,
-        #[cfg(not(feature = "tls"))] length: Option<usize>,
-        #[cfg(feature = "tls")] length: Option<usize>,
+        length: Option<usize>,
     ) -> io::Result<()> {
         if let Some(length) = length {
             if length == 0 {
                 return Ok(());
             }
         }
-        writer.write_all(&self.remains).await?;
-        #[cfg(feature = "tls")]
-        tokio::io::copy(&mut self.reader, writer).await?;
-        #[cfg(not(feature = "tls"))]
-        ::io::copy_tcp(&mut self.reader, writer, length).await?;
+        if length.is_some() {
+            writer.write_all(&self.remains).await?;
+            #[cfg(feature = "tls")]
+            tokio::io::copy(&mut self.reader, writer).await?;
+            #[cfg(not(feature = "tls"))]
+            ::io::copy_tcp(&mut self.reader, writer, length).await?;
+        }
         Ok(())
     }
 }
