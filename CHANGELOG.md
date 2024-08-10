@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.7](https://github.com/majksa-dev/rust-gateway/compare/v0.8.6...v0.8.7) (2024-08-10)
+
+
+### Bug Fixes
+
+* left rx does not need to be mutable ([e88f295](https://github.com/majksa-dev/rust-gateway/commit/e88f295634a3ab7c94794273fd45c36afe13ddf9))
+* mapping of endpoints into hashmap ([3e6a382](https://github.com/majksa-dev/rust-gateway/commit/3e6a38219af8b3e1cb8d1e82d3c6b0a536979313))
+
 ## [0.8.6](https://github.com/majksa-dev/rust-gateway/compare/v0.8.5...v0.8.6) (2024-08-10)
 
 
