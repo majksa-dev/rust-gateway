@@ -23,6 +23,22 @@ mod tests {
         );
     }
 
+    #[utils::test(setup = before_each, teardown = after_each)]
+    async fn should_succeed_when_running_100_times(ctx: Context) {
+        for _ in 0..1000 {
+            let mut request = Request::new("/hello".to_string(), Method::GET);
+            request.insert_header(header::HOST, "app");
+            request.insert_header(header::CONTENT_LENGTH, "0");
+            let response = run_request(request, &ctx).await;
+            debug!("{:?}", response);
+            assert_eq!(response.status, StatusCode::OK);
+            assert_eq!(
+                response.body().unwrap().read_all(0).await.unwrap(),
+                "Hello, world!"
+            );
+        }
+    }
+
     mod helper {
         use async_trait::async_trait;
         use essentials::debug;

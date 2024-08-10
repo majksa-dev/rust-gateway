@@ -172,6 +172,8 @@ where
                     line.push(c as char);
                 }
             }
+            buf_idx = 0;
+            buf.iter_mut().take(read).for_each(|b| *b = 0);
         }
     }
 }

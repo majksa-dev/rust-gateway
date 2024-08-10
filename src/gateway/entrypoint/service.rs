@@ -1,7 +1,7 @@
 use crate::{
     http::{HeaderMapExt, Request, Response, WriteResponse},
     server::app::GenerateKey,
-    utils::{Also, AsyncAndThen},
+    utils::Also,
     Ctx, Id, Next, Origin, ReadRequest, RouterService, Service,
 };
 use anyhow::Result;
@@ -108,22 +108,19 @@ impl EntryPoint {
         match self.handle_request(request, left_rx, left_remains).await {
             Ok(mut response) => {
                 response.insert_header(header::CONNECTION, "close");
-                left_tx
-                    .write_response(&response)
-                    .await
-                    .also(|_| debug!(target: "entrypoint", stage = "response", data = ?response, "3 - wrote response"))
-                    .async_and_then(move |_| async move {
-                        left_tx.flush().await?;
-                        let length = response.get_content_length();
-                        if let Some(mut body) = response.body() {
-                            body.copy_to(left_tx, length)
-                                .await?;
-                        }
-                        left_tx.shutdown().await?;
-                        Ok(())
-                    })
-                    .await
-                    .also(|r| debug!(target: "entrypoint", stage = "response", data = ?r, "4 - wrote response body"))
+                debug!(target: "entrypoint", stage = "response", data = ?response, "3 - writing response");
+                left_tx.write_response(&response).await?;
+                debug!(target: "entrypoint", stage = "response", data = ?response, "3 - wrote response");
+                left_tx.flush().await?;
+                let length = response.get_content_length();
+                if let Some(mut body) = response.body() {
+                    debug!(target: "entrypoint", stage = "response", "4 - writing response body");
+                    body.copy_to(left_tx, length).await?;
+                    debug!(target: "entrypoint", stage = "response", "4 - wrote response body");
+                }
+                left_tx.shutdown().await?;
+                debug!(target: "entrypoint", stage = "response", "5 - finishing");
+                Ok(())
             }
             Err(error) => {
                 error!("{}", error);
