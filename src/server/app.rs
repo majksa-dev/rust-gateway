@@ -211,3 +211,117 @@ where
 {
     ServerBuilder::new(Box::new(generate_peer_key), Box::new(origin))
 }
+
+#[cfg(test)]
+mod tests {
+    use async_trait::async_trait;
+    use http::StatusCode;
+    use pretty_assertions::assert_eq;
+    use std::io;
+    use testing_utils::{get_random_ports, surf};
+    use tokio::{io::AsyncWriteExt, spawn};
+
+    use crate::{
+        gateway::origin::{OriginServer, OriginServerBuilder},
+        http::{response::ResponseBody, HeaderMapExt},
+        AnyRouterBuilder, Ctx, Origin, ReadHalf, Response, WriteHalf,
+    };
+
+    use super::*;
+
+    #[derive(Debug)]
+    pub struct StringBody(pub String);
+
+    #[async_trait]
+    impl ResponseBody for StringBody {
+        async fn read_all(self: Box<Self>, _: usize) -> io::Result<String> {
+            Ok(self.0)
+        }
+
+        async fn copy_to<'a>(
+            &mut self,
+            writer: &'a mut WriteHalf,
+            _: Option<usize>,
+        ) -> io::Result<()> {
+            writer.write_all(self.0.as_bytes()).await?;
+            Ok(())
+        }
+    }
+
+    #[derive(Debug)]
+    struct MockOriginServer;
+
+    #[async_trait]
+    impl OriginServer for MockOriginServer {
+        async fn connect(
+            &self,
+            ctx: &Ctx,
+            _: Request,
+            _: ReadHalf,
+            _: Vec<u8>,
+        ) -> Result<Response> {
+            let mut response = Response::new(StatusCode::OK);
+            let app_id = ctx.app_id.to_string();
+            response.insert_header("content-length", app_id.len().to_string().as_str());
+            response.set_body(StringBody(app_id));
+            Ok(response)
+        }
+    }
+
+    #[derive(Debug)]
+    struct MockOriginServerBuilder;
+
+    #[async_trait]
+    impl OriginServerBuilder for MockOriginServerBuilder {
+        async fn build(
+            self: Box<Self>,
+            _: &[String],
+            _: &HashMap<String, Vec<String>>,
+        ) -> Result<Origin> {
+            Ok(Box::new(MockOriginServer))
+        }
+    }
+
+    #[tokio::test]
+    async fn test_server_builder() {
+        let ports = get_random_ports(2);
+        let mut builder = ServerBuilder::new(
+            Box::new(|req| {
+                Some((
+                    req.header("host").unwrap().to_str().unwrap().to_string(),
+                    None,
+                ))
+            }),
+            Box::new(MockOriginServerBuilder),
+        )
+        .with_app_port(ports[0])
+        .with_health_check_port(ports[1]);
+        for i in 0..100 {
+            builder = builder.register_peer(format!("test{}", i), AnyRouterBuilder);
+        }
+        let server = builder.build().await.unwrap();
+        spawn(server.run());
+        wait_for_server(ports[1]).await;
+
+        for i in 0..100 {
+            let mut response = surf::get(format!("http://127.0.0.1:{}", ports[0]))
+                .header("host", format!("test{}", i))
+                .await
+                .expect("Failed to get response");
+            assert_eq!(surf::StatusCode::Ok, response.status());
+            assert_eq!(i.to_string(), response.body_string().await.unwrap());
+        }
+    }
+
+    async fn wait_for_server(health_check: u16) {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_millis(100));
+        loop {
+            if let Ok(response) = surf::get(format!("http://127.0.0.1:{}", health_check)).await {
+                if response.status() == 200 {
+                    break;
+                }
+            }
+            interval.tick().await;
+        }
+    }
+}
