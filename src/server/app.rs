@@ -117,8 +117,7 @@ impl ServerBuilder {
             .into_iter()
             .map(|(id, router)| (id, router.build()))
             .map(|(id, (ids, router))| ((id.clone(), ids), (id, router)))
-            .collect::<(Vec<_>, Vec<_>)>();
-        let endpoints = endpoints.into_iter().collect::<HashMap<_, _>>();
+            .collect::<(HashMap<_, _>, Vec<_>)>();
         let middlewares = join_all(
             self.middlewares
                 .into_values()
