@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.4](https://github.com/majksa-dev/rust-gateway/compare/v0.8.3...v0.8.4) (2024-08-10)
+
+
+### Bug Fixes
+
+* **server:** unpredictable sorting of apps ([b160a6a](https://github.com/majksa-dev/rust-gateway/commit/b160a6aa479977030b44c70ff19d259a3c5612de))
+
 ## [0.8.3](https://github.com/majksa-dev/rust-gateway/compare/v0.8.2...v0.8.3) (2024-08-09)
 
 
