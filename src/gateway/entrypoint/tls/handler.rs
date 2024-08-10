@@ -27,8 +27,8 @@ impl Handler for EntryPointHandler {
         info!(ip = ?ip, "Connection received");
         let (left_rx, left_tx) = match self.acceptor.accept(left).await {
             Ok(stream) => stream.to_split(),
-            Err(err) => {
-                error!(ip = ?ip, "Failed to accept TLS connection: {}", err);
+            Err(error) => {
+                error!(?ip, ?error, "Failed to accept TLS connection");
                 return;
             }
         };

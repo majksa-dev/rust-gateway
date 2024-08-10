@@ -85,7 +85,7 @@ impl EntryPoint {
                 info!(ip = ?ip, "Connection closed");
             }
             Err(error) => {
-                error!("{}", error);
+                error!(?error, "Connection closed with error");
                 if let Err(err) = tx
                     .write_all(
                         b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -123,7 +123,7 @@ impl EntryPoint {
                 Ok(())
             }
             Err(error) => {
-                error!("{}", error);
+                error!(?error, "Failed to handle request");
                 left_tx
                     .write_all(b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
                     .await?;

@@ -174,8 +174,8 @@ impl Server {
                 result = self.app.run() => {
                     debug!("App stopped");
                     tx_health.send(()).unwrap();
-                    if let Err(err) = result {
-                        error!("App error: {:?}", err);
+                    if let Err(error) = result {
+                        error!(?error, "App error");
                     }
                 }
                 _ = rx_app => {}
@@ -187,8 +187,8 @@ impl Server {
                 result = self.health_check.run() => {
                     debug!("health_check stopped");
                     tx_app.send(()).unwrap();
-                    if let Err(err) = result {
-                        error!("health_check error: {:?}", err);
+                    if let Err(error) = result {
+                        error!(?error, "health_check error");
                     }
                 }
                 _ = rx_health => {}

@@ -7,11 +7,11 @@ pub struct HealthCheck;
 #[async_trait]
 impl Handler for HealthCheck {
     async fn handle(&self, mut stream: TcpStream) {
-        if let Err(e) = stream
+        if let Err(error) = stream
             .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
             .await
         {
-            essentials::error!("Failed to write to stream: {:?}", e);
+            essentials::warn!(?error, "HealthCheck: Failed to write response");
         }
     }
 }

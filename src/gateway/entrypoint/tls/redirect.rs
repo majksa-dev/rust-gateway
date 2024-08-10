@@ -34,7 +34,7 @@ impl RedirectHandler {
                 info!(ip = ?ip, "Connection closed");
             }
             Err(error) => {
-                error!("{}", error);
+                error!(?error, "Connection closed with error");
                 if let Err(err) = left_tx
                     .write_all(
                         b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
