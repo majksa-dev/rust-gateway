@@ -19,7 +19,8 @@ impl OriginServer for Origin {
         &self,
         context: &Ctx,
         mut request: Request,
-        mut left_rx: ReadHalf,
+        #[cfg(not(feature = "tls"))] mut left_rx: ReadHalf,
+        #[cfg(feature = "tls")] left_rx: ReadHalf,
         left_remains: Vec<u8>,
     ) -> Result<Response> {
         let connection = match self.0.get(context.app_id) {
