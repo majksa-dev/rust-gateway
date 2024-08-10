@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.5](https://github.com/majksa-dev/rust-gateway/compare/v0.8.4...v0.8.5) (2024-08-10)
+
+
+### Bug Fixes
+
+* **tls:** response buffer not being cleared ([b75a978](https://github.com/majksa-dev/rust-gateway/commit/b75a978c2ac1d6bfba94404792074e782e9e2c49))
+
 ## [0.8.4](https://github.com/majksa-dev/rust-gateway/compare/v0.8.3...v0.8.4) (2024-08-10)
 
 
