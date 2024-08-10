@@ -26,7 +26,7 @@ impl EntryPoint {
     pub fn new<M: IntoIterator<Item = Service>>(
         origin: Origin,
         generate_peer_key: Box<GenerateKey>,
-        peers: HashMap<String, RouterService>,
+        peers: Vec<(String, RouterService)>,
         middlewares: M,
     ) -> Self {
         Self {

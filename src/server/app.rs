@@ -23,7 +23,7 @@ pub(crate) type GenerateKey =
 pub struct ServerBuilder {
     origin: OriginBuilder,
     generate_peer_key: Box<GenerateKey>,
-    peers: HashMap<String, RouterBuilderService>,
+    peers: Vec<(String, RouterBuilderService)>,
     middlewares: HashMap<usize, MiddlewareBuilderService>,
     host: IpAddr,
     app_port: u16,
@@ -39,7 +39,7 @@ impl ServerBuilder {
         Self {
             origin,
             generate_peer_key,
-            peers: HashMap::new(),
+            peers: Vec::new(),
             middlewares: HashMap::new(),
             host: IpAddr::from([127, 0, 0, 1]), // Default host (localhost)
             app_port: 80,
@@ -57,7 +57,7 @@ impl ServerBuilder {
 
     /// Register a peer with the given key.
     pub fn register_peer(mut self, key: String, router: impl RouterBuilder + 'static) -> Self {
-        self.peers.insert(key, Box::new(router));
+        self.peers.push((key, Box::new(router)));
         self
     }
 
@@ -107,20 +107,17 @@ impl ServerBuilder {
     /// Build the server with the given configuration.
     /// The server will listen on the specified ports and will use the specified health check.
     pub async fn build(self) -> Result<Server> {
-        let ids = self.peers.keys().cloned().collect::<Box<[String]>>();
-        let routers = self
+        let ids = self
+            .peers
+            .iter()
+            .map(|(id, _)| id.clone())
+            .collect::<Box<[_]>>();
+        let (endpoints, peers) = self
             .peers
             .into_iter()
             .map(|(id, router)| (id, router.build()))
-            .collect::<HashMap<_, _>>();
-        let endpoints = routers
-            .iter()
-            .map(|(id, (ids, _))| (id.clone(), ids.clone()))
-            .collect::<HashMap<_, _>>();
-        let peers = routers
-            .into_iter()
-            .map(|(id, (_, router))| (id, router))
-            .collect::<HashMap<_, _>>();
+            .map(|(id, (ids, router))| ((id.clone(), ids), (id, router)))
+            .collect::<(HashMap<_, _>, Vec<_>)>();
         let middlewares = join_all(
             self.middlewares
                 .into_values()
