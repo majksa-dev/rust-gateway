@@ -243,6 +243,8 @@ pub mod rate_limit;
 pub(crate) mod server;
 pub(crate) mod utils;
 
+#[cfg(feature = "tls")]
+pub use gateway::origin::tls;
 pub use gateway::{
     ctx::{AppConfig, AppCtx, ConfigToContext, Ctx, Id, MiddlewareConfig, MiddlewareCtx},
     entrypoint::EntryPoint,
