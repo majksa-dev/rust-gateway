@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/majksa-dev/rust-gateway/compare/v0.8.8...v0.9.0) (2024-08-11)
+
+
+### Features
+
+* **tls:** add option to connect to origin using tls ([3707256](https://github.com/majksa-dev/rust-gateway/commit/37072566849a730db5d5eac48b318e274b180c34))
+
 ## [0.8.8](https://github.com/majksa-dev/rust-gateway/compare/v0.8.7...v0.8.8) (2024-08-10)
 
 
