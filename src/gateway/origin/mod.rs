@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use std::{collections::HashMap, io::Read};
 
 pub mod tcp;
+#[cfg(feature = "tls")]
+pub mod tls;
 
 pub type Origin = Box<dyn OriginServer + Send + Sync + 'static>;
 pub type OriginResponse = Box<dyn Read + Unpin + Send + 'static>;

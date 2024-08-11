@@ -27,8 +27,22 @@ impl Split<OwnedReadHalf, OwnedWriteHalf> for TcpStream {
 }
 
 #[cfg(feature = "tls")]
-impl Split<tls::ReadHalf, tls::WriteHalf> for tokio_rustls::server::TlsStream<TcpStream> {
+impl Split<tls::ReadHalf, tls::WriteHalf> for tokio_rustls::TlsStream<TcpStream> {
     fn to_split(self) -> (tls::ReadHalf, tls::WriteHalf) {
         tls::split(self)
+    }
+}
+
+#[cfg(feature = "tls")]
+impl Split<tls::ReadHalf, tls::WriteHalf> for tokio_rustls::server::TlsStream<TcpStream> {
+    fn to_split(self) -> (tls::ReadHalf, tls::WriteHalf) {
+        tls::split_server(self)
+    }
+}
+
+#[cfg(feature = "tls")]
+impl Split<tls::ReadHalf, tls::WriteHalf> for tokio_rustls::client::TlsStream<TcpStream> {
+    fn to_split(self) -> (tls::ReadHalf, tls::WriteHalf) {
+        tls::split_client(self)
     }
 }
