@@ -1290,7 +1290,22 @@ dependencies = [
  "dotenv",
  "eyre",
  "serde",
- "serde-env",
+ "serde-env 0.1.1",
+ "tracing",
+ "tracing-panic",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "essentials"
+version = "0.3.7"
+source = "git+https://github.com/majksa-dev/rust-essentials?tag=0.3.7#b600fabb9de6a15e1ade33df84c978d7f47c6be3"
+dependencies = [
+ "color-eyre",
+ "dotenv",
+ "eyre",
+ "serde",
+ "serde-env 0.2.0",
  "tracing",
  "tracing-panic",
  "tracing-subscriber",
@@ -1532,7 +1547,7 @@ dependencies = [
  "base64 0.22.1",
  "bb8-redis",
  "chrono",
- "essentials",
+ "essentials 0.3.7",
  "futures",
  "http 1.1.0",
  "io",
@@ -2209,7 +2224,7 @@ source = "git+https://github.com/majksa-dev/rust-io?tag=0.3.0#9d3222b268ddeb7826
 dependencies = [
  "chrono",
  "derive_more",
- "essentials",
+ "essentials 0.3.6",
  "futures-util",
  "libc",
  "rand 0.8.5",
@@ -3913,6 +3928,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-env"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d13536c0c431652192b75c7d5afa83dedae98f91d7e687ff30a009e9d15284fb"
+dependencies = [
+ "anyhow",
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.205"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4439,7 +4464,7 @@ dependencies = [
  "assert_fs",
  "chrono",
  "derive_more",
- "essentials",
+ "essentials 0.3.6",
  "futures-util",
  "rand 0.8.5",
  "serde",
